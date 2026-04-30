@@ -8,7 +8,8 @@ using UnityEngine.SceneManagement;
 public class BlockManager : MonoBehaviour
 {
     [Header("References")]
-    public GameObject blockPrefab;
+    public GameObject blockPrefab;         // Block with tunnel path carved into it
+    public GameObject trapBlockPrefab;     // Trap block (no tunnel) - used during asteroid challenges
     public Transform spawnPoint;
     public float spawnHeightOffset = 3f;
     public CameraTarget cameraTarget;
@@ -28,48 +29,82 @@ public class BlockManager : MonoBehaviour
     private Transform topBlock;
 
     [Header("UI Panels")]
-    public GameObject newPanel; // <-- Your Game Over Panel
+    public GameObject newPanel;     // Game Over Panel
     public GameObject gamePanel;
 
     [Header("Timer Settings")]
-    public float challengeTimeLimit = 30f; // The fixed 30-second challenge limit
+    public float challengeTimeLimit = 30f;
     private float timer;
     private bool isTimerRunning = false;
     public TMP_Text timerText;
 
-    // ----- NEW CHALLENGE VARIABLES -----
+    // ----- CHALLENGE VARIABLES -----
     [Header("Challenge Settings")]
     public int blocksToFirstChallenge = 15;
-    public int blocksToNextChallenge = 10; // Subsequent challenges start after 10 blocks
-    public int blocksGoalInChallenge = 7; // Must place 7 blocks within the time limit
-    private int blocksLandedInCurrentChallenge = 0; // Counter for the current challenge
-    private int totalBlocksLanded = 0; // Total blocks landed across the whole game
-    private int blocksSinceLastChallengeTrigger = 0; // Counter for blocks until the next challenge starts
-    // -----------------------------------
+    public int blocksToNextChallenge = 10;
+    public int blocksGoalInChallenge = 7;
+    private int blocksLandedInCurrentChallenge = 0;
+    private int totalBlocksLanded = 0;
+    private int blocksSinceLastChallengeTrigger = 0;
+    // --------------------------------
 
     [Header("Challenge UI")]
-    public TMP_Text challengePopupText; // The TMP Text component for the popup message
+    public TMP_Text challengePopupText;
 
-    [Header("Wind Settings")]
-    public bool windEnabled = false;
-    public int windStartAfter = 10;
-    public int windFrequency = 5; // Wind will appear every X blocks after the start
-    private int blocksSinceLastWind = 0;
-    private bool isCurrentBlockWindy = false;
+    // ------------------------------------------------------------------
+    // ASTEROID SETTINGS (replaces Wind)
+    // ------------------------------------------------------------------
+    [Header("Asteroid Settings")]
+    public bool asteroidEnabled = false;
+    public int asteroidStartAfter = 10;          // Blocks before asteroid events can begin
+    public int asteroidFrequency = 5;            // Asteroid event every X blocks after start
+    private int blocksSinceLastAsteroid = 0;
+    private bool isCurrentBlockAsteroidEvent = false;
 
-    // --------------------------------------------------------------------
-    // ? NEW WIND ANIMATION REFERENCES
-    [Header("Wind Animation")]
-    public GameObject leftWindAnimatorObject;
-    public GameObject rightWindAnimatorObject;
-    public string windAnimationName = "WindPlay"; // Set this to the name of your wind animation clip
-    // --------------------------------------------------------------------
+    [Header("Asteroid Animation")]
+    public GameObject asteroidAnimatorObject;    // Asteroid visual / animator
+    public string asteroidAnimationName = "AsteroidPlay";
+
+    [Header("Asteroid Impact")]
+    public GameObject asteroidImpactObject;      // The asteroid-hitting-tower object/animator
+    public Animator asteroidImpactAnimator;
+    public float asteroidImpactAnimationDuration = 2.0f;
+    public float asteroidImpactVerticalOffset = 0f;
+    // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // TRAP BLOCK SETTINGS (used during asteroid challenges)
+    // ------------------------------------------------------------------
+    [Header("Trap Block Settings")]
+    [Tooltip("Probability (0-1) that a block spawned during an asteroid challenge is a trap block.")]
+    public float trapBlockChance = 0.3f;         // 30% chance per block during challenge
+    private bool isNextBlockTrap = false;
+    // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // TIME FREEZER POWER-UP
+    // ------------------------------------------------------------------
+    [Header("Time Freezer Power-Up")]
+    public GameObject timeFreezerUI;             // Button / icon to activate Time Freezer
+    public float timeFreezerDuration = 5f;       // How long the freeze lasts
+    public int timeFreezerUsesPerChallenge = 1;  // Uses allowed per asteroid event
+    private int timeFreezerUsesRemaining = 0;
+    private bool isTimeFrozen = false;
+    public TMP_Text timeFreezerCountText;        // Optional: shows remaining uses
+    // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // ALIEN SETTINGS
+    // ------------------------------------------------------------------
+    [Header("Alien Settings")]
+    public GameObject alienObject;               // The alien that flies through the tunnel
+    // The alien movement is driven externally by an AlienTunnelFollower script
+    // that reads connected tunnel paths on placed blocks.
+    // BlockManager just enables/disables it and notifies it on block placement.
+    // ------------------------------------------------------------------
 
     [Header("Settings Panel")]
     public GameObject settingsPanel;
-
-    [Header("Wind Particles")]
-    public ParticleSystem windParticles;
 
     public CinemachineVirtualCamera virtualCamera;
     public float moveSpeed = 1f;
@@ -84,59 +119,54 @@ public class BlockManager : MonoBehaviour
     [Header("Sound Settings")]
     public AudioSource fallSound;
     public AudioSource gameOverSound;
-    public AudioSource windSound;
-
-    [Header("Wind Force Settings")]
-    public float leftForce = -1.0f;
-    public float rightForce = 1.0f;
-
-    [Header("Camera Settings")]
-    public float cameraStepOffset = 0.85f; // Used to manually adjust the camera tracking
+    public AudioSource asteroidSound;            // Replaces windSound
+    public AudioSource timeFreezeSound;
 
     [Header("Perfect Placement Settings")]
     public float snapThreshold = 0.4f;
     public float failThreshold = 1.2f;
 
-    // ------------------ FLOOD SETTINGS ------------------
-    [Header("Flood Settings")]
-    public GameObject floodObject;// Your flood sprite
-    public Animator floodAnimator;// Flood animator
-    public float floodAnimationDuration = 2.0f;
-    public float floodVerticalOffset = 0f; // Adjust flood position relative to holder
-                                           // ----------------------------------------------------
+    [Header("Camera Settings")]
+    public float cameraStepOffset = 0.85f;
 
-    // ?? NEW SLOW FALL SETTINGS ??
+    // Slow fall (kept from original)
     [Header("Slow Fall Settings")]
-    public int gravityReductionStartBlock = 18; // Block number (inclusive) to start reducing gravity
-    public float reducedGravityScale = 0.5f; // The reduced gravity scale for slower falling
-    // ?? END NEW SLOW FALL SETTINGS ??
+    public int gravityReductionStartBlock = 18;
+    public float reducedGravityScale = 0.5f;
 
+    // -----------------------------------------------------------------------
+    // Private state
+    // -----------------------------------------------------------------------
     private void Start()
     {
         initialHolderPos = holder.position;
 
-        timer = challengeTimeLimit; // Initialize the timer value
+        timer = challengeTimeLimit;
         isTimerRunning = false;
-        timerText.text = ""; // Hide timer until challenge starts
+        timerText.text = "";
 
-        // Initialize challenge tracking
         totalBlocksLanded = 0;
         blocksSinceLastChallengeTrigger = 0;
         blocksLandedInCurrentChallenge = 0;
+        blocksSinceLastAsteroid = 0;
 
-        // Initialize wind tracking
-        blocksSinceLastWind = 0;
+        if (asteroidImpactObject != null)
+            asteroidImpactObject.SetActive(false);
 
-        if (floodObject != null)
-            floodObject.SetActive(false);
+        if (asteroidAnimatorObject != null)
+            asteroidAnimatorObject.SetActive(false);
 
-        // Ensure wind visuals are off at start
-        if (leftWindAnimatorObject != null) leftWindAnimatorObject.SetActive(false);
-        if (rightWindAnimatorObject != null) rightWindAnimatorObject.SetActive(false);
-
-        // ** NEW: Ensure the Challenge Popup is hidden at start **
         if (challengePopupText != null)
             challengePopupText.gameObject.SetActive(false);
+
+        // Hide Time Freezer UI until an asteroid challenge starts
+        if (timeFreezerUI != null)
+            timeFreezerUI.SetActive(false);
+
+        // Alien starts hidden; the AlienTunnelFollower enables it when
+        // there are enough stacked blocks to travel through.
+        if (alienObject != null)
+            alienObject.SetActive(false);
 
         SpawnBlock(autoDrop: true);
     }
@@ -144,21 +174,20 @@ public class BlockManager : MonoBehaviour
     public void AddScore(int amount)
     {
         score += amount;
-
         if (scoreText != null)
             scoreText.text = "" + score;
     }
 
     public IEnumerator ResetTimeScale(float delay)
     {
-        yield return new WaitForSecondsRealtime(delay); // Use Realtime to wait regardless of timeScale
+        yield return new WaitForSecondsRealtime(delay);
         Time.timeScale = 1f;
     }
 
     private void Update()
     {
-        // ---------------------- CHALLENGE TIMER LOGIC ----------------------
-        if (isTimerRunning)
+        // ---- CHALLENGE TIMER ----
+        if (isTimerRunning && !isTimeFrozen)
         {
             timer -= Time.deltaTime;
 
@@ -170,76 +199,83 @@ public class BlockManager : MonoBehaviour
                 isTimerRunning = false;
                 timerText.text = "Time: 0";
 
-                // FAILURE CONDITION: Timer ran out AND goal wasn't met
                 if (blocksLandedInCurrentChallenge < blocksGoalInChallenge)
                 {
-                    Debug.Log("Challenge Failed: Goal not met in time.");
-
-                    // 1. Perform non-UI cleanup
+                    Debug.Log("Asteroid Challenge Failed: Goal not met in time.");
                     EndGame();
-
-                    // 2. Start the coroutine to handle the delayed block cleanup and panel display (Flood)
-                    StartCoroutine(HandleTimeOut());
-
+                    StartCoroutine(HandleAsteroidImpact());
                     canSpawn = false;
                 }
                 else
                 {
-                    // This case is technically a successful challenge, but was handled in OnBlockLanded.
                     EndChallengeSuccess();
                 }
             }
         }
     }
 
-    private IEnumerator HandleTimeOut()
+    // -----------------------------------------------------------------------
+    // ASTEROID IMPACT (replaces flood HandleTimeOut)
+    // -----------------------------------------------------------------------
+    private IEnumerator HandleAsteroidImpact()
     {
-        // 1. Start the Flood Animation (Blocks are still visible!)
-        if (floodObject != null)
-            floodObject.SetActive(true);
+        // Show asteroid hitting the tower
+        if (asteroidImpactObject != null)
+            asteroidImpactObject.SetActive(true);
 
-        if (floodAnimator != null)
-            floodAnimator.Play("flood");
+        if (asteroidImpactAnimator != null)
+            asteroidImpactAnimator.Play("AsteroidImpact");
 
-        // 2. Wait for the animation
-        yield return new WaitForSeconds(floodAnimationDuration);
+        if (asteroidSound != null)
+            asteroidSound.Play();
 
-        // 3. Cleanup: Hide blocks and holder now (just before the panel)
+        yield return new WaitForSeconds(asteroidImpactAnimationDuration);
+
         CleanupGameObjects();
-
-        // 4. Show the Game Over Panel
         ShowGameOverPanel();
     }
 
-    // ** NEW METHOD: To display the challenge goal popup **
+    // -----------------------------------------------------------------------
+    // CHALLENGE POPUP
+    // -----------------------------------------------------------------------
     private IEnumerator ShowChallengePopup(int goalBlocks, float duration)
     {
         if (challengePopupText != null)
         {
-            // Set the message and make it visible
-            challengePopupText.text = $"Drop {goalBlocks} Blocks!";
+            challengePopupText.text = $"Drop {goalBlocks} Blocks before impact!";
             challengePopupText.gameObject.SetActive(true);
-
-            // Wait for the specified duration
             yield return new WaitForSeconds(duration);
-
-            // Hide the text
             challengePopupText.gameObject.SetActive(false);
         }
     }
 
-
-    // Handles successful completion of the time challenge
+    // -----------------------------------------------------------------------
+    // CHALLENGE SUCCESS
+    // -----------------------------------------------------------------------
     private void EndChallengeSuccess()
     {
-        Debug.Log("Challenge Succeeded!");
+        Debug.Log("Asteroid Challenge Succeeded!");
         isTimerRunning = false;
-        timer = challengeTimeLimit; // Reset timer value
-        timerText.text = ""; // Hide timer
-        blocksSinceLastChallengeTrigger = 0; // Start counting 10 blocks again
+        timer = challengeTimeLimit;
+        timerText.text = "";
+        blocksSinceLastChallengeTrigger = 0;
+
+        // Hide Time Freezer during non-challenge phase
+        if (timeFreezerUI != null)
+            timeFreezerUI.SetActive(false);
+
+        // Hide asteroid animator
+        if (asteroidAnimatorObject != null)
+            asteroidAnimatorObject.SetActive(false);
+
+        // Stop asteroid sound
+        if (asteroidSound != null)
+            asteroidSound.Stop();
     }
 
-
+    // -----------------------------------------------------------------------
+    // HOLDER MOVEMENT
+    // -----------------------------------------------------------------------
     private void LateUpdate()
     {
         UpdateHolderMovement();
@@ -261,64 +297,76 @@ public class BlockManager : MonoBehaviour
         holder.position = new Vector3(initialHolderPos.x + offsetX, targetY, holder.position.z);
     }
 
-    // ? NEW METHOD: To set the Z rotation constraint on a Rigidbody2D
+    // -----------------------------------------------------------------------
+    // ROTATION CONSTRAINT HELPER
+    // -----------------------------------------------------------------------
     public void SetBlockZRotationConstraint(Transform blockTransform, bool freeze)
     {
-        // We use Rigidbody2D here, as blocks have already dropped.
         Rigidbody2D rb = blockTransform.GetComponent<Rigidbody2D>();
         if (rb != null)
         {
             if (freeze)
-            {
-                // Set the Freeze Rotation Z bit (lock it)
                 rb.constraints |= RigidbodyConstraints2D.FreezeRotation;
-            }
             else
-            {
-                // Clear the Freeze Rotation Z bit (unlock it)
                 rb.constraints &= ~RigidbodyConstraints2D.FreezeRotation;
-            }
         }
     }
 
+    // -----------------------------------------------------------------------
+    // BLOCK LANDED CALLBACK
+    // -----------------------------------------------------------------------
     public void OnBlockLanded(Transform landedBlock)
     {
         if (fallSound != null)
             fallSound.Play();
 
-        // Update overall and challenge block counters
+        // Check if this was a trap block — instant game over
+        TunnelBlock blockScript = landedBlock.GetComponent<TunnelBlock>();
+        if (blockScript != null && blockScript.IsTrapBlock)
+        {
+            Debug.Log("Trap block landed on tower! Game over.");
+            EndGame();
+            StartCoroutine(HandleAsteroidImpact());
+            return;
+        }
+
         totalBlocksLanded++;
+
+        // Notify the alien follower a new tunnel block was placed
+        NotifyAlienOfNewBlock(landedBlock);
 
         if (isTimerRunning)
         {
             blocksLandedInCurrentChallenge++;
 
-            // SUCCESS CONDITION: Goal met before timer runs out
             if (blocksLandedInCurrentChallenge >= blocksGoalInChallenge)
-            {
                 EndChallengeSuccess();
-                // The block count for the next challenge starts fresh from 0
-            }
         }
-        else // Timer is NOT running, check if it should start
+        else
         {
             blocksSinceLastChallengeTrigger++;
 
-            int triggerThreshold = totalBlocksLanded <= blocksToFirstChallenge ? blocksToFirstChallenge : blocksToNextChallenge;
+            int triggerThreshold = totalBlocksLanded <= blocksToFirstChallenge
+                ? blocksToFirstChallenge
+                : blocksToNextChallenge;
 
-            // Check if the trigger threshold is reached
             if (blocksSinceLastChallengeTrigger >= triggerThreshold)
             {
-                Debug.Log($"Starting new challenge: Block Goal = {blocksGoalInChallenge}, Time Limit = {challengeTimeLimit}s");
+                Debug.Log($"Starting asteroid challenge: Goal = {blocksGoalInChallenge}, Time = {challengeTimeLimit}s");
                 isTimerRunning = true;
-                timer = challengeTimeLimit; // Start timer at 30s
-                blocksLandedInCurrentChallenge = 1; // This landed block counts as the first one!
+                timer = challengeTimeLimit;
+                blocksLandedInCurrentChallenge = 1;
 
-                // ** NEW: Start the popup animation **
+                // Give the player Time Freezer uses
+                timeFreezerUsesRemaining = timeFreezerUsesPerChallenge;
+                UpdateTimeFreezerUI();
+                if (timeFreezerUI != null)
+                    timeFreezerUI.SetActive(true);
+
                 StartCoroutine(ShowChallengePopup(blocksGoalInChallenge, 2.5f));
+                ShowAsteroidApproachAnimation();
             }
         }
-
 
         // Game over if block placement is too far off
         if (topBlock != null)
@@ -327,9 +375,8 @@ public class BlockManager : MonoBehaviour
 
             if (Mathf.Abs(xDiff) > failThreshold)
             {
-                // Rigidbody rb = landedBlock.GetComponent<Rigidbody>(); // Original line was for 3D Rigidbody
-                Rigidbody2D rb2d = landedBlock.GetComponent<Rigidbody2D>(); // Use 2D Rigidbody
-                if (rb2d != null) rb2d.bodyType = RigidbodyType2D.Dynamic; // Ensure block falls if it missed
+                Rigidbody2D rb2d = landedBlock.GetComponent<Rigidbody2D>();
+                if (rb2d != null) rb2d.bodyType = RigidbodyType2D.Dynamic;
                 EndGame();
                 return;
             }
@@ -343,57 +390,115 @@ public class BlockManager : MonoBehaviour
                 );
             }
 
-            // ? CORE FIX: Freeze the PREVIOUS top block's Z rotation
-            // The old top block is now part of the stable stack.
             SetBlockZRotationConstraint(topBlock, true);
         }
 
         AddScore(10);
-        topBlock = landedBlock; // Set the NEW block as the top block
-
-        // ? CORE FIX: UNFREEZE the NEW top block's Z rotation
-        // This is the block that should be subject to rotation forces (e.g., wind).
+        topBlock = landedBlock;
         SetBlockZRotationConstraint(topBlock, false);
 
         StartCoroutine(MoveHolderUp(holderStepUp, 0.3f));
-
         UpdateVisualElementsPosition();
 
-        // --- WIND FREQUENCY LOGIC ---
-        // 1. Check for initial global wind activation
-        if (!windEnabled && blockCount >= windStartAfter)
+        // --- ASTEROID FREQUENCY LOGIC ---
+        if (!asteroidEnabled && blockCount >= asteroidStartAfter)
         {
-            windEnabled = true;
-            // Next block will be windy, so reset counter.
-            blocksSinceLastWind = 0;
+            asteroidEnabled = true;
+            blocksSinceLastAsteroid = 0;
         }
-        // 2. Increment the counter if wind is enabled globally
-        else if (windEnabled)
+        else if (asteroidEnabled)
         {
-            blocksSinceLastWind++;
-
-            // 3. Check for periodic wind trigger
-            if (blocksSinceLastWind >= windFrequency)
-            {
-                // Next block will be windy, so reset counter.
-                blocksSinceLastWind = 0;
-            }
+            blocksSinceLastAsteroid++;
+            if (blocksSinceLastAsteroid >= asteroidFrequency)
+                blocksSinceLastAsteroid = 0;
         }
 
-        // 4. Ensure wind sound/particles stop if wind is NOT active for the next block
-        if (blocksSinceLastWind > 0)
+        if (blocksSinceLastAsteroid > 0)
         {
-            if (windSound != null) windSound.Stop();
-            if (windParticles != null) windParticles.Stop();
-            if (leftWindAnimatorObject != null) leftWindAnimatorObject.SetActive(false);
-            if (rightWindAnimatorObject != null) rightWindAnimatorObject.SetActive(false);
+            if (asteroidSound != null) asteroidSound.Stop();
+            if (asteroidAnimatorObject != null) asteroidAnimatorObject.SetActive(false);
         }
-        // --- END WIND FREQUENCY LOGIC ---
+        // --- END ASTEROID FREQUENCY LOGIC ---
 
         if (canSpawn)
             StartCoroutine(SpawnNextBlock());
     }
 
+    // -----------------------------------------------------------------------
+    // ALIEN TUNNEL FOLLOWER NOTIFICATION
+    // -----------------------------------------------------------------------
+    private void NotifyAlienOfNewBlock(Transform newBlock)
+    {
+        if (alienObject == null) return;
+
+        // Enable the alien once we have at least 2 stacked blocks with tunnels
+        if (totalBlocksLanded >= 2 && !alienObject.activeSelf)
+            alienObject.SetActive(true);
+
+        // If an AlienTunnelFollower component exists, notify it
+        AlienTunnelFollower follower = alienObject.GetComponent<AlienTunnelFollower>();
+        if (follower != null)
+            follower.OnNewBlockPlaced(newBlock);
+    }
+
+    // -----------------------------------------------------------------------
+    // TIME FREEZER POWER-UP (called by UI button)
+    // -----------------------------------------------------------------------
+    public void ActivateTimeFreezer()
+    {
+        if (!isTimerRunning || timeFreezerUsesRemaining <= 0 || isTimeFrozen) return;
+
+        timeFreezerUsesRemaining--;
+        UpdateTimeFreezerUI();
+        StartCoroutine(TimeFreezerCoroutine());
+    }
+
+    private IEnumerator TimeFreezerCoroutine()
+    {
+        isTimeFrozen = true;
+        if (timeFreezeSound != null) timeFreezeSound.Play();
+
+        // Visual feedback: you can trigger a freeze animation here
+        Debug.Log($"Time frozen for {timeFreezerDuration}s!");
+        yield return new WaitForSeconds(timeFreezerDuration);
+
+        isTimeFrozen = false;
+        Debug.Log("Time freeze ended.");
+    }
+
+    private void UpdateTimeFreezerUI()
+    {
+        if (timeFreezerCountText != null)
+            timeFreezerCountText.text = timeFreezerUsesRemaining > 0
+                ? $"Freeze x{timeFreezerUsesRemaining}"
+                : "No Freezes";
+
+        // Disable button when out of uses
+        if (timeFreezerUI != null)
+        {
+            var btn = timeFreezerUI.GetComponentInChildren<UnityEngine.UI.Button>();
+            if (btn != null) btn.interactable = timeFreezerUsesRemaining > 0;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // ASTEROID APPROACH ANIMATION
+    // -----------------------------------------------------------------------
+    private void ShowAsteroidApproachAnimation()
+    {
+        if (asteroidAnimatorObject != null)
+        {
+            asteroidAnimatorObject.SetActive(true);
+            asteroidAnimatorObject.GetComponent<Animator>()?.Play(asteroidAnimationName);
+        }
+
+        if (asteroidSound != null && !asteroidSound.isPlaying)
+            asteroidSound.Play();
+    }
+
+    // -----------------------------------------------------------------------
+    // SPAWN LOGIC
+    // -----------------------------------------------------------------------
     private IEnumerator SpawnNextBlock()
     {
         canSpawn = false;
@@ -407,129 +512,44 @@ public class BlockManager : MonoBehaviour
         blockCount++;
         Camofsetadd();
 
-        // --- CHECK FOR WIND STATE FOR THIS BLOCK ---
-        bool applyWind = false;
+        // Determine if asteroid event applies to this block
+        bool applyAsteroid = asteroidEnabled && blocksSinceLastAsteroid == 0;
+        isCurrentBlockAsteroidEvent = applyAsteroid;
 
-        // Wind applies if windEnabled is true AND the counter is at the trigger point (0)
-        if (windEnabled && blocksSinceLastWind == 0)
-        {
-            applyWind = true;
-            isCurrentBlockWindy = true;
-        }
-        // --- END WIND STATE CHECK ---
+        // Determine if this block should be a trap block
+        // Trap blocks only appear during an active timed challenge
+        isNextBlockTrap = isTimerRunning && (Random.value < trapBlockChance);
 
         float yOffset = -0.7f;
         spawnPoint.position = new Vector3(holder.position.x, holder.position.y + yOffset, holder.position.z);
 
-        GameObject newBlock = Instantiate(blockPrefab, spawnPoint.position, Quaternion.identity);
+        // Choose prefab: trap block (no tunnel) or normal tunnel block
+        GameObject prefabToSpawn = (isNextBlockTrap && trapBlockPrefab != null) ? trapBlockPrefab : blockPrefab;
+
+        GameObject newBlock = Instantiate(prefabToSpawn, spawnPoint.position, Quaternion.identity);
         newBlock.transform.SetParent(holder);
 
-        Block blockScript = newBlock.GetComponent<Block>();
+        TunnelBlock blockScript = newBlock.GetComponent<TunnelBlock>();
         if (blockScript != null)
-            // ?? MODIFIED LINE: Pass the blockCount and the determined 'applyWind' state to the block's Initialize method
-            blockScript.Initialize(this, blockCount, autoDrop, applyWind);
+        {
+            // Pass asteroid state instead of wind; IsTrapBlock is set inside Block.Initialize
+            blockScript.Initialize(this, blockCount, autoDrop, applyAsteroid, isNextBlockTrap);
+        }
 
         if (cameraTarget != null)
             cameraTarget.SetTopBlock(newBlock.transform);
 
-        // Only show visuals/sound if wind is applied to THIS block
-        if (applyWind && blockScript != null)
-        {
-            RotateWindParticles(blockScript.WindForce);
-
-            float displayForce = 0f;
-            if (blockScript.WindForce > 0) displayForce = rightForce;
-            else if (blockScript.WindForce < 0) displayForce = leftForce;
-
-            // Call the new method to show the directional animation
-            ShowWindAnimation(displayForce);
-
-            if (windSound != null && !windSound.isPlaying)
-                windSound.Play();
-        }
+        if (applyAsteroid)
+            ShowAsteroidApproachAnimation();
     }
 
+    // -----------------------------------------------------------------------
+    // HELPERS
+    // -----------------------------------------------------------------------
     private IEnumerator MoveHolderUp(float step, float delay)
     {
         yield return new WaitForSeconds(delay);
         holder.position += new Vector3(0, step, 0);
-    }
-
-    private void RotateWindParticles(float force)
-    {
-        if (windParticles == null) return;
-
-        // Turn off all animation objects before changing wind direction
-        if (leftWindAnimatorObject != null) leftWindAnimatorObject.SetActive(false);
-        if (rightWindAnimatorObject != null) rightWindAnimatorObject.SetActive(false);
-
-        if (force > 0)
-            windParticles.transform.rotation = Quaternion.Euler(0, 0, 0);
-        else if (force < 0)
-            windParticles.transform.rotation = Quaternion.Euler(0, 0, 180);
-        else
-            windParticles.Stop();
-
-        if (!windParticles.isPlaying && force != 0)
-            windParticles.Play();
-    }
-
-    // ? NEW POSITION UPDATE LOGIC
-    private void UpdateVisualElementsPosition()
-    {
-        // 1. Update Wind Animators
-        // Use a position relative to the holder's Y position
-        Vector3 targetWindPos = new Vector3(
-            leftWindAnimatorObject.transform.position.x,
-            holder.position.y,
-            leftWindAnimatorObject.transform.position.z
-        );
-
-        if (leftWindAnimatorObject != null)
-            leftWindAnimatorObject.transform.position = targetWindPos;
-
-        if (rightWindAnimatorObject != null)
-            rightWindAnimatorObject.transform.position = targetWindPos;
-
-
-        // 2. Update Flood Object?
-        if (floodObject != null && topBlock != null)
-        {
-            Vector3 targetFloodPos = new Vector3(
-                floodObject.transform.position.x,
-                topBlock.position.y + floodVerticalOffset, // This line controls its height
-                floodObject.transform.position.z
-            );
-            floodObject.transform.position = targetFloodPos;
-        }
-    }
-
-
-    // ? NEW METHOD TO MANAGE WIND ANIMATION VISUALS
-    public void ShowWindAnimation(float force)
-    {
-        if (!windEnabled || !isCurrentBlockWindy) return;
-
-        // Ensure both are off initially
-        if (leftWindAnimatorObject != null) leftWindAnimatorObject.SetActive(false);
-        if (rightWindAnimatorObject != null) rightWindAnimatorObject.SetActive(false);
-
-        if (force > 0) // Right Force
-        {
-            if (rightWindAnimatorObject != null)
-            {
-                rightWindAnimatorObject.SetActive(true);
-                rightWindAnimatorObject.GetComponent<Animator>()?.Play(windAnimationName);
-            }
-        }
-        else if (force < 0) // Left Force
-        {
-            if (leftWindAnimatorObject != null)
-            {
-                leftWindAnimatorObject.SetActive(true);
-                leftWindAnimatorObject.GetComponent<Animator>()?.Play(windAnimationName);
-            }
-        }
     }
 
     void Camofsetadd()
@@ -538,23 +558,58 @@ public class BlockManager : MonoBehaviour
             virtualCamera.GetCinemachineComponent<CinemachineFramingTransposer>().m_TrackedObjectOffset.y += cameraStepOffset;
     }
 
+    // -----------------------------------------------------------------------
+    // VISUAL ELEMENT POSITION UPDATE
+    // -----------------------------------------------------------------------
+    private void UpdateVisualElementsPosition()
+    {
+        // Update Asteroid Animator position relative to holder
+        if (asteroidAnimatorObject != null)
+        {
+            Vector3 targetPos = new Vector3(
+                asteroidAnimatorObject.transform.position.x,
+                holder.position.y,
+                asteroidAnimatorObject.transform.position.z
+            );
+            asteroidAnimatorObject.transform.position = targetPos;
+        }
+
+        // Update Asteroid Impact Object position
+        if (asteroidImpactObject != null && topBlock != null)
+        {
+            Vector3 targetImpactPos = new Vector3(
+                asteroidImpactObject.transform.position.x,
+                topBlock.position.y + asteroidImpactVerticalOffset,
+                asteroidImpactObject.transform.position.z
+            );
+            asteroidImpactObject.transform.position = targetImpactPos;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // CLEANUP & GAME OVER
+    // -----------------------------------------------------------------------
     private void CleanupGameObjects()
     {
         if (holder != null)
             holder.gameObject.SetActive(false);
 
-        Block[] allBlocks = FindObjectsOfType<Block>();
+        TunnelBlock[] allBlocks = FindObjectsOfType<TunnelBlock>();
         foreach (var block in allBlocks)
             Destroy(block.gameObject);
 
-        // Also ensure wind animations stop and hide during cleanup
-        if (leftWindAnimatorObject != null) leftWindAnimatorObject.SetActive(false);
-        if (rightWindAnimatorObject != null) rightWindAnimatorObject.SetActive(false);
-        if (windParticles != null) windParticles.Stop();
+        if (asteroidAnimatorObject != null) asteroidAnimatorObject.SetActive(false);
+        if (asteroidImpactObject != null) asteroidImpactObject.SetActive(false);
+        if (asteroidSound != null) asteroidSound.Stop();
 
-        // ** Ensure popup is hidden during cleanup **
         if (challengePopupText != null)
             challengePopupText.gameObject.SetActive(false);
+
+        if (timeFreezerUI != null)
+            timeFreezerUI.SetActive(false);
+
+        if (alienObject != null)
+            alienObject.SetActive(false);
     }
 
     private void ShowGameOverPanel()
@@ -576,25 +631,28 @@ public class BlockManager : MonoBehaviour
 
         canSpawn = false;
         isTimerRunning = false;
-        timerText.text = ""; // Ensure timer text is cleared/hidden
+        isTimeFrozen = false;
+        timerText.text = "";
 
-        // If EndGame is called by a block falling (timer > 0):
         if (timer > 0)
         {
             CleanupGameObjects();
             ShowGameOverPanel();
         }
-        // If EndGame is called by time running out (timer <= 0),
-        // HandleTimeOut() handles the final cleanup and panel display.
+        // If timer ran out, HandleAsteroidImpact() handles cleanup.
     }
 
+    // -----------------------------------------------------------------------
+    // SETTINGS
+    // -----------------------------------------------------------------------
     public void OpenSettings()
     {
         canSpawn = false;
         StopAllCoroutines();
         isTimerRunning = false;
+        isTimeFrozen = false;
 
-        CleanupGameObjects(); // Clean up blocks and animations when opening settings
+        CleanupGameObjects();
 
         if (gamePanel != null)
             gamePanel.SetActive(false);
@@ -614,19 +672,12 @@ public class BlockManager : MonoBehaviour
         if (holder != null)
             holder.gameObject.SetActive(true);
 
-        // Timer resumes if it was running before settings opened, or game continues count-up
-        // We don't want to blindly set it to true, but the state management is complex here.
-        // For simplicity in a single-file script, we'll allow it to be re-enabled if needed elsewhere.
-        // For now, only re-enable spawning logic.
         canSpawn = true;
     }
 
     public void RestartGame()
     {
-        // Get the name of the current active scene
         string currentSceneName = SceneManager.GetActiveScene().name;
-
-        // Reload the scene
         SceneManager.LoadScene(currentSceneName);
     }
 }

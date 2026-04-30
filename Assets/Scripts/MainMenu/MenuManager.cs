@@ -86,6 +86,9 @@ public class MenuManager : MonoBehaviour
             AnimatePanelFade(panelToShow);
             panelHistory.Push(panelToShow);
         }
+
+        // When you show the leaderboard panel, also call:
+        //leaderboardManager.LoadLeaderboard();
     }
 
     public void UFOFlyIntoButton(GameObject targetPanel)

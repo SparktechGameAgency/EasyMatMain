@@ -53,7 +53,7 @@ public class LeaderboardManager : MonoBehaviour
         Debug.Log("Loading leaderboard...");
 
         db.Collection("users")
-          .OrderByDescending("xp")
+          //.OrderByDescending("xp")
           .GetSnapshotAsync()
           .ContinueWith(task =>
           {
