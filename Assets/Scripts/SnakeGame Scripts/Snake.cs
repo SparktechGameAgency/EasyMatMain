@@ -12,6 +12,9 @@ public class Snake : MonoBehaviour
     //[SerializeField] private Vector2Int gridSize = new Vector2Int(10, 20); // Adjust to fit with panel
 
     private State state;
+
+    private bool gameStarted = false;
+
     public float snakeMoveSpeed = 2f;
     private Vector2Int gridPosotion;
 
@@ -41,7 +44,7 @@ public class Snake : MonoBehaviour
 
     private void Awake()
     {
-        gridPosotion = new Vector2Int(10, 10);
+        gridPosotion = new Vector2Int(8, 15);
         gridMoveTimerMax = 1f;
         gridMoveTimer = gridMoveTimerMax;
 
@@ -64,14 +67,36 @@ public class Snake : MonoBehaviour
     }
 
     // Update is called once per frame
+    //void Update()
+    //{
+    //    switch (state)
+    //    {
+    //        case State.Alive: HandleInput(); HandleGridMovement(); break;
+    //        case State.Dead: break;
+    //    }
+
+    //}
     void Update()
     {
         switch (state)
         {
-            case State.Alive: HandleInput(); HandleGridMovement(); break;
-            case State.Dead: break;
-        }
+            case State.Alive:
+                if (!gameStarted)
+                {
+                    if (Input.GetMouseButtonDown(0) ||
+                        (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began))
+                    {
+                        gameStarted = true;
+                    }
+                    return;
+                }
+                HandleInput();
+                HandleGridMovement();
+                break;
 
+            case State.Dead:
+                break;
+        }
     }
 
     // added new for testing ==================================
@@ -443,7 +468,8 @@ public class Snake : MonoBehaviour
         {
             if (previousSnakeMovePosition == null)
             {
-                return Direction.Right;
+                //return Direction.Right;
+                return direction;
             }
             else
             {

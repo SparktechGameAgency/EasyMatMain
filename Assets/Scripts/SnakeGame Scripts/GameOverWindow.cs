@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using System.Collections;
+using DG.Tweening;
 
 public class GameOverWindow : MonoBehaviour
 {
@@ -41,21 +43,38 @@ public class GameOverWindow : MonoBehaviour
         //    returnHomeButton.onClick.AddListener(() => LoadScene(returnSceneName));
     }
 
+    //public void ShowGameOver()
+    //{
+    //    gameObject.SetActive(true);
+
+    //    if (gameOverPanel != null)
+    //    {
+    //        gameOverPanel.SetActive(true);
+    //        Debug.Log("Game Over Panel Active");
+    //    }
+
+    //    if (finalScoreText != null)
+    //        finalScoreText.text = GameHandler.GetScore().ToString();
+
+    //    // Pause the game
+    //    Time.timeScale = 0f;
+    //}
     public void ShowGameOver()
     {
-        gameObject.SetActive(true);
+        if (finalScoreText != null)
+            finalScoreText.text = "Score: " + GameHandler.GetScore().ToString();
 
         if (gameOverPanel != null)
         {
             gameOverPanel.SetActive(true);
-            Debug.Log("Game Over Panel Active");
+            gameOverPanel.transform.localScale = Vector3.zero;
+            gameOverPanel.transform
+                .DOScale(Vector3.one, 0.4f)
+                .SetDelay(1f)
+                .SetEase(Ease.OutBack)
+                .SetUpdate(true)
+                .OnComplete(() => Time.timeScale = 0f);
         }
-
-        if (finalScoreText != null)
-            finalScoreText.text = GameHandler.GetScore().ToString();
-
-        // Pause the game
-        Time.timeScale = 0f;
     }
 
     public void RestartGame()
