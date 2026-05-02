@@ -84,6 +84,14 @@ public class Snake : MonoBehaviour
         FindObjectOfType<GameHandler>().levelGrid.CreateWalls();
     }
 
+    public IEnumerator SlowDownFor(float duration)
+    {
+        float originalSpeed = snakeMoveSpeed;
+        snakeMoveSpeed = originalSpeed * 0.5f;
+        yield return new WaitForSeconds(duration);
+        snakeMoveSpeed = originalSpeed;
+    }
+
 
     private void HandleInput()
     {

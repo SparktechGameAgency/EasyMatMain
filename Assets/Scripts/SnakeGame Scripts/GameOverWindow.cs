@@ -7,6 +7,8 @@ public class GameOverWindow : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private Button playAgainButton;
+
+    [SerializeField] private Text finalScoreText;
     //[SerializeField] private Button exitButton;
     [SerializeField] private Button returnHomeButton;
 
@@ -27,15 +29,30 @@ public class GameOverWindow : MonoBehaviour
 
         if (returnHomeButton == null)
             returnHomeButton.onClick.AddListener(() => LoadScene(returnSceneName));
+
+        //if (gameOverPanel == null)
+        //    gameOverPanel.SetActive(false);
+        ////gameObject.SetActive(true);
+
+        //if (playAgainButton != null)
+        //    playAgainButton.onClick.AddListener(RestartGame);
+
+        //if (returnHomeButton != null)
+        //    returnHomeButton.onClick.AddListener(() => LoadScene(returnSceneName));
     }
 
     public void ShowGameOver()
     {
+        gameObject.SetActive(true);
+
         if (gameOverPanel != null)
         {
             gameOverPanel.SetActive(true);
             Debug.Log("Game Over Panel Active");
         }
+
+        if (finalScoreText != null)
+            finalScoreText.text = GameHandler.GetScore().ToString();
 
         // Pause the game
         Time.timeScale = 0f;
