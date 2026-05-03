@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
 
 public class AlienRunner : MonoBehaviour
 {
@@ -8,8 +7,12 @@ public class AlienRunner : MonoBehaviour
     public TowerManager towerManager;
 
     private int currentBlockIndex = 0;
-    private int currentWaypointIndex = 0;
     private bool isRunning = false;
+
+    void Start()
+    {
+        StartRunning();
+    }
 
     public void StartRunning()
     {
@@ -28,7 +31,9 @@ public class AlienRunner : MonoBehaviour
             }
 
             BlockController block = towerManager.tower[currentBlockIndex];
-            Transform[] waypoints = block.tunnelWaypoints;
+
+            // ✅ Fixed — go through tunnelData to get waypoints
+            Transform[] waypoints = block.tunnelData.waypoints;
 
             // Move through each waypoint in the block
             foreach (Transform wp in waypoints)
