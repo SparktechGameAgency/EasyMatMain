@@ -3,20 +3,19 @@ using System.Collections.Generic;
 
 public class TowerManager : MonoBehaviour
 {
-    public float blockHeight = 1.28f; // height of each block in world units
+    public float blockHeight = 1.28f;
     public List<BlockController> tower = new List<BlockController>();
     private Vector3 nextPlacePosition;
 
     void Start()
     {
-        nextPlacePosition = Vector3.zero; // base of tower
+        nextPlacePosition = Vector3.zero;
     }
 
     public bool TryPlaceBlock(BlockController block)
     {
         if (block.isTrapBlock)
         {
-           
             GameManagerBlock.Instance.GameOver("Trap block hit the tower!");
             return false;
         }
@@ -26,13 +25,17 @@ public class TowerManager : MonoBehaviour
         block.Place();
         tower.Add(block);
 
-        // Check tunnel connectivity
+        // Tag it as Tower for collision detection
+        block.gameObject.tag = "Tower";
+
+        // Check tunnel connection with block below
         if (tower.Count > 1)
         {
-            bool connected = CheckTunnelConnection(
-                tower[tower.Count - 2],
-                tower[tower.Count - 1]
-            );
+            BlockController lower = tower[tower.Count - 2];
+            BlockController upper = tower[tower.Count - 1];
+
+            bool connected = CheckTunnelConnection(lower, upper);
+
             if (!connected)
             {
                 GameManagerBlock.Instance.GameOver("Tunnel broken!");
@@ -41,17 +44,17 @@ public class TowerManager : MonoBehaviour
         }
 
         nextPlacePosition += Vector3.up * blockHeight;
+        GameManagerBlock.Instance.AddScore();
         return true;
     }
 
+    // ✅ Fixed — uses tunnelData not tunnelExit directly
     bool CheckTunnelConnection(BlockController lower, BlockController upper)
     {
-        // The exit of the lower block must match the entry of the upper block
-        // Compare exit world position of lower to entry world position of upper
-        float tolerance = 0.3f;
-        Vector3 lowerExit = lower.tunnelExit.position;
-        Vector3 upperEntry = upper.tunnelEntry.position;
-        return Mathf.Abs(lowerExit.x - upperEntry.x) < tolerance;
+        TunnelExit lowerExit = lower.tunnelData.exitPoint;
+        TunnelExit upperEntry = upper.tunnelData.entryPoint;
+
+        return lowerExit == upperEntry;
     }
 
     public Vector3 GetTopPosition()
