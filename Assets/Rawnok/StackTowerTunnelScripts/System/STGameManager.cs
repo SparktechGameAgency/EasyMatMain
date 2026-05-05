@@ -10,9 +10,10 @@ namespace StackTower
 
         [Header("Settings")]
         public int maxMisses = 3;
+        public int pointsPerBlock = 10; // ✅ configurable points per block
 
         [Header("Spawn Settings")]
-        public float spawnDelay = 0.5f; // ✅ seconds after tap before next block spawns
+        public float spawnDelay = 0.5f;
 
         [Header("Game Over Settings")]
         public bool canGameOver = true;
@@ -20,14 +21,14 @@ namespace StackTower
         [Header("References")]
         public Transform blockSpawnPoint;
         public Transform deathZone;
-        public TextMeshProUGUI scoreText;
+        public TextMeshProUGUI scoreText; // ✅ back
         public TextMeshProUGUI livesText;
         public GameObject gameOverPanel;
 
         [HideInInspector] public int score = 0;
         private int missCount = 0;
         private bool gameActive = true;
-        private bool waitingToSpawn = false; // prevents double spawn
+        private bool waitingToSpawn = false;
 
         void Awake() => Instance = this;
 
@@ -36,13 +37,12 @@ namespace StackTower
             if (gameOverPanel != null)
                 gameOverPanel.SetActive(false);
             else
-                Debug.LogWarning("STGameManager: gameOverPanel is not assigned!");
+                Debug.LogWarning("STGameManager: gameOverPanel not assigned!");
 
             UpdateUI();
-            SpawnNextBlock(); // first block, no delay
+            SpawnNextBlock();
         }
 
-        // ✅ Called by BlockController the moment player taps
         public void OnPlayerTapped()
         {
             if (!gameActive || waitingToSpawn) return;
@@ -95,15 +95,13 @@ namespace StackTower
         }
 
         // ─── Normal block landed ─────────────────────────────────
-        // ✅ Only updates score — spawn is triggered by tap, not landing
         public void BlockStacked()
         {
-            score++;
+            score += pointsPerBlock; // ✅ 10, 20, 30...
             UpdateUI();
         }
 
         // ─── Normal block fell into void ─────────────────────────
-        // ✅ Only updates lives — spawn is triggered by tap, not void
         public void BlockMissed(GameObject block)
         {
             ObjectPool.Instance.ReturnBlock(block);
@@ -114,35 +112,41 @@ namespace StackTower
             {
                 GameOver();
                 if (!canGameOver)
-                    return; // keep playing, next spawn comes from tap
+                    return;
             }
         }
 
         // ─── Trap landed on tower ────────────────────────────────
         public void TrapLandedOnTower(GameObject block)
         {
-            // ✅ Do NOT return block to pool — stays visible on tower
-            // ✅ Do NOT destroy — just freeze + show panel
-            GameOver();
-
-            if (!canGameOver)
+            if (canGameOver)
             {
-                // canGameOver false → treat as normal miss, pool the trap
+                ObjectPool.Instance.ReturnBlock(block);
+                GameOver();
+            }
+            else
+            {
                 ObjectPool.Instance.ReturnBlock(block);
             }
         }
 
-        // ─── Trap fell into void → dodged ───────────────────────
-        // ✅ Only pools the block — spawn comes from tap
+        // ─── Trap fell into void ─────────────────────────────────
         public void TrapDodged(GameObject block)
         {
             ObjectPool.Instance.ReturnBlock(block);
         }
 
+        // ─── Alien reached top ───────────────────────────────────
+        public void AlienReachedTop()
+        {
+            if (!gameActive) return;
+            GameOver();
+        }
+
         void UpdateUI()
         {
             if (scoreText != null)
-                scoreText.text = "Score: " + score;
+                scoreText.text = score.ToString(); // ✅ just "10", "20", "30"
             else
                 Debug.LogWarning("STGameManager: scoreText not assigned!");
 
@@ -157,7 +161,7 @@ namespace StackTower
             if (!canGameOver) return;
 
             gameActive = false;
-            Time.timeScale = 0f; // ✅ full freeze — physics, update, everything stops
+            Time.timeScale = 0f;
 
             if (gameOverPanel != null)
                 gameOverPanel.SetActive(true);
@@ -165,7 +169,7 @@ namespace StackTower
 
         public void RestartGame()
         {
-            Time.timeScale = 1f; // ✅ unfreeze before reload
+            Time.timeScale = 1f;
             UnityEngine.SceneManagement.SceneManager.LoadScene(
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
         }
