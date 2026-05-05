@@ -17,6 +17,7 @@ TagManager:
   - BombExp
   - Egg
   - front
+  - BaseBlock
   layers:
   - Default
   - TransparentFX
