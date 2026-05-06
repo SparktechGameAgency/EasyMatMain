@@ -7,6 +7,9 @@ namespace StackTower
         [Header("Trap Setting (tick ON for trap prefab only)")]
         [SerializeField] private bool isTrap = false;
 
+        [Header("Alien Climb Points (drag S1, S2, S3 etc.)")]
+        public Transform[] climbPoints;
+
         [Header("Physics Settings")]
         [SerializeField] public float fallGravityScale = 3f;
         [SerializeField] public float maxFallSpeed = 10f;
@@ -63,11 +66,9 @@ namespace StackTower
                 return;
             }
 
-            // Cap fall speed
             if (maxFallSpeed > 0 && rb.velocity.y < -maxFallSpeed)
                 rb.velocity = new Vector2(rb.velocity.x, -maxFallSpeed);
 
-            // Void check
             if (!hasResolved && deathZone != null && transform.position.y < deathZone.position.y)
                 ResolveVoid();
         }
@@ -77,8 +78,6 @@ namespace StackTower
             isRiding = false;
             rb.gravityScale = fallGravityScale;
             rb.constraints = RigidbodyConstraints2D.None;
-
-            // ✅ Notify game manager — triggers spawn delay timer from tap
             STGameManager.Instance.OnPlayerTapped();
         }
 
@@ -124,7 +123,6 @@ namespace StackTower
 
             if (isTrap)
             {
-                // ✅ Trap: don't touch the block — just notify game manager
                 STGameManager.Instance.TrapLandedOnTower(gameObject);
             }
             else

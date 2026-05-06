@@ -9,7 +9,7 @@ namespace StackTower
 
         [Header("Climb Settings")]
         public float climbSpeed = 2f;
-        public float reachThreshold = 0.1f; // distance to count as "reached"
+        public float reachThreshold = 0.1f;
 
         private Queue<Transform> climbQueue = new Queue<Transform>();
         private Transform currentTarget = null;
@@ -18,28 +18,36 @@ namespace StackTower
         void Awake()
         {
             Instance = this;
-            gameObject.SetActive(false); // ✅ hidden at start
+            gameObject.SetActive(false);
         }
 
-        // Called by TowerManager when X blocks have landed
         public void Activate(Transform startPoint)
         {
-            // Snap to start point world position
-            transform.position = startPoint.position;
             gameObject.SetActive(true);
+            transform.position = startPoint.position;
             isClimbing = true;
 
-            // If points already queued (blocks landed before activation)
-            // start moving toward first one
+            Debug.Log("Alien activated at: " + startPoint.position);
+            Debug.Log("Points in queue: " + climbQueue.Count);
+
             TryDequeueNext();
         }
 
-        // Called by TowerManager each time a block lands
-        public void AddClimbPoint(Transform point)
+        public void AddClimbPointsFromBlock(BlockController block)
         {
-            climbQueue.Enqueue(point);
+            if (block == null || block.climbPoints == null) return;
 
-            // If alien is active but has no current target, start moving
+            // ✅ Loop in reverse — lowest point (last element) queued first
+            for (int i = block.climbPoints.Length - 1; i >= 0; i--)
+            {
+                Transform point = block.climbPoints[i];
+                if (point != null)
+                {
+                    climbQueue.Enqueue(point);
+                    Debug.Log("Added climb point: " + point.name);
+                }
+            }
+
             if (isClimbing && currentTarget == null)
                 TryDequeueNext();
         }
@@ -48,14 +56,14 @@ namespace StackTower
         {
             if (!isClimbing || currentTarget == null) return;
 
-            // Smooth move toward current target world position
+            // Smooth move toward target world position
             transform.position = Vector3.MoveTowards(
                 transform.position,
                 currentTarget.position,
                 climbSpeed * Time.deltaTime
             );
 
-            // Check if reached current target
+            // Check if reached
             float dist = Vector3.Distance(transform.position, currentTarget.position);
             if (dist <= reachThreshold)
                 OnReachedTarget();
@@ -63,28 +71,32 @@ namespace StackTower
 
         void OnReachedTarget()
         {
-            // Snap exactly to target
             transform.position = currentTarget.position;
+            Debug.Log("Alien reached: " + currentTarget.name);
 
             if (climbQueue.Count > 0)
             {
-                // More points to climb → move to next
                 TryDequeueNext();
             }
             else
             {
-                // Queue empty → alien reached top block → Game Over
+                // ✅ Queue empty → just wait here, no game over
                 currentTarget = null;
-                STGameManager.Instance.AlienReachedTop();
+                Debug.Log("Alien waiting for next block...");
             }
         }
 
         void TryDequeueNext()
         {
             if (climbQueue.Count > 0)
+            {
                 currentTarget = climbQueue.Dequeue();
+                Debug.Log("Alien targeting: " + currentTarget.name);
+            }
             else
+            {
                 currentTarget = null;
+            }
         }
 
         public void Stop()

@@ -18,9 +18,9 @@ namespace StackTower
         public int blocksBeforeScroll = 3;
 
         [Header("Alien Settings")]
-        public AlienClimber alienClimber;           // ✅ drag Alien GO here
-        public Transform alienStartPoint;        // ✅ drag StartPoint (child of BaseBlock)
-        public int blocksToActivateAlien = 3; // ✅ after X blocks alien appears
+        public AlienClimber alienClimber;
+        public Transform alienStartPoint;
+        public int blocksToActivateAlien = 3;
 
         [Header("Difficulty")]
         public float speedIncreasePerBlock = 0.1f;
@@ -30,7 +30,6 @@ namespace StackTower
         private int landedBlockCount = 0;
         private SpawnerMover spawnerMover;
         private List<GameObject> stackedBlocks = new List<GameObject>();
-        private List<Transform> climbPoints = new List<Transform>();
 
         void Awake() => Instance = this;
 
@@ -63,29 +62,30 @@ namespace StackTower
             stackedBlocks.Add(block);
             landedBlockCount++;
 
-            // ✅ Find ClimbPoint on this block
-            Transform climbPoint = block.transform.Find("ClimbPoint");
-            if (climbPoint != null)
+            // ✅ Get BlockController and pass climb points to alien
+            BlockController bc = block.GetComponent<BlockController>();
+            if (bc != null)
             {
-                climbPoints.Add(climbPoint);
-
-                // Always give point to alien queue regardless of active state
-                // AlienClimber will hold them until activated
                 if (alienClimber != null)
-                    alienClimber.AddClimbPoint(climbPoint);
+                    alienClimber.AddClimbPointsFromBlock(bc);
             }
             else
             {
-                Debug.LogWarning("Block missing ClimbPoint child: " + block.name);
+                Debug.LogWarning("Block missing BlockController: " + block.name);
             }
 
             // ✅ Activate alien after X blocks
             if (landedBlockCount == blocksToActivateAlien)
             {
                 if (alienClimber != null && alienStartPoint != null)
+                {
+                    Debug.Log("Activating alien after " + landedBlockCount + " blocks!");
                     alienClimber.Activate(alienStartPoint);
+                }
                 else
+                {
                     Debug.LogWarning("TowerManager: alienClimber or alienStartPoint not assigned!");
+                }
             }
 
             // Scroll world down after threshold
@@ -113,11 +113,6 @@ namespace StackTower
 
                 if (block.transform.position.y < deathY)
                 {
-                    // Remove its ClimbPoint from list
-                    Transform cp = block.transform.Find("ClimbPoint");
-                    if (cp != null && climbPoints.Contains(cp))
-                        climbPoints.Remove(cp);
-
                     stackedBlocks.RemoveAt(i);
                     block.transform.SetParent(null);
                     block.tag = "Untagged";
