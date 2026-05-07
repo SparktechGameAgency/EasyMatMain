@@ -16,6 +16,8 @@ namespace StackTower
         [SerializeField] private float settleVelocity = 0.15f;
         [SerializeField] private float settleAngular = 10f;
         [SerializeField] private float settleTime = 0.25f;
+        [Header("Spawn Settings")]
+        public float spawnZ = 3.34f; // ✅ control Z from Inspector
 
         private bool isRiding = true;
         private bool hasLanded = false;
@@ -50,7 +52,7 @@ namespace StackTower
             transform.SetParent(null);
 
             Vector3 spawnPos = spawnPointRef.position;
-            transform.position = new Vector3(spawnPos.x, spawnPos.y, 0f);
+            transform.position = new Vector3(spawnPos.x, spawnPos.y, spawnZ); // ✅
         }
 
         void Update()
@@ -58,7 +60,7 @@ namespace StackTower
             if (isRiding)
             {
                 Vector3 pos = spawnPoint.position;
-                transform.position = new Vector3(pos.x, pos.y, 0f);
+                transform.position = new Vector3(pos.x, pos.y, spawnZ); // ✅ not 0f anymore
 
                 if (Input.GetMouseButtonDown(0))
                     Release();
@@ -142,6 +144,31 @@ namespace StackTower
                 STGameManager.Instance.TrapDodged(gameObject);
             else
                 STGameManager.Instance.BlockMissed(gameObject);
+        }
+        // ✅ Returns climb point with lowest Y on this block
+        public Transform GetLowestClimbPoint()
+        {
+            if (climbPoints == null || climbPoints.Length == 0) return null;
+
+            Transform lowest = climbPoints[0];
+            foreach (Transform cp in climbPoints)
+                if (cp != null && cp.position.y < lowest.position.y)
+                    lowest = cp;
+
+            return lowest;
+        }
+
+        // ✅ Returns climb point with highest Y on this block
+        public Transform GetHighestClimbPoint()
+        {
+            if (climbPoints == null || climbPoints.Length == 0) return null;
+
+            Transform highest = climbPoints[0];
+            foreach (Transform cp in climbPoints)
+                if (cp != null && cp.position.y > highest.position.y)
+                    highest = cp;
+
+            return highest;
         }
     }
 }
