@@ -24,7 +24,8 @@ namespace StackTower
         public int blocksToActivateAlien = 3;
 
         [Header("Connection Settings")]
-        public float minOverlapToConnect = 0.05f; // ✅ tiny touch = connected, increase for stricter
+        public float minOverlapToConnect = 0.05f;
+        public float perfectThreshold = 0.05f;
 
         [Header("Difficulty")]
         public float speedIncreasePerBlock = 0.1f;
@@ -75,12 +76,10 @@ namespace StackTower
                     Debug.LogWarning("TowerManager: alienClimber or alienStartPoint not assigned!");
             }
 
-            // Scroll world down
             if (landedBlockCount > blocksBeforeScroll)
                 targetRootY -= blockHeight;
 
             RampDifficulty();
-
             StartCoroutine(CheckConnectionNextFrame(block));
         }
 
@@ -96,11 +95,17 @@ namespace StackTower
                 yield break;
             }
 
-            // First block always connects
+            // ✅ First block — always perfect
             if (stackedBlocks.Count == 1)
             {
+                if (LandingTextEffect.Instance != null)
+                    LandingTextEffect.Instance.ShowPerfect(block.transform.position);
+
+                STGameManager.Instance.BlockStacked(true);
+
                 if (alienClimber != null)
                     alienClimber.AddClimbPointsFromBlock(newBC);
+
                 yield break;
             }
 
@@ -123,18 +128,13 @@ namespace StackTower
             Collider2D newLowestCol = newLowest.GetComponent<Collider2D>();
             Collider2D belowHighestCol = belowHighest.GetComponent<Collider2D>();
 
-            if (newLowestCol == null)
+            if (newLowestCol == null || belowHighestCol == null)
             {
-                Debug.LogWarning("No Collider2D on: " + newLowest.name);
-                yield break;
-            }
-            if (belowHighestCol == null)
-            {
-                Debug.LogWarning("No Collider2D on: " + belowHighest.name);
+                Debug.LogWarning("Missing Collider2D on climb points!");
                 yield break;
             }
 
-            // ✅ X overlap in world units
+            // X overlap check
             Bounds boundsA = newLowestCol.bounds;
             Bounds boundsB = belowHighestCol.bounds;
 
@@ -143,31 +143,48 @@ namespace StackTower
                 Mathf.Max(boundsA.min.x, boundsB.min.x));
 
             bool connected = xOverlap >= minOverlapToConnect;
-            Debug.Log("X Overlap: " + xOverlap.ToString("F3") + " units — connected: " + connected);
+            Debug.Log("X Overlap: " + xOverlap.ToString("F3") + " connected: " + connected);
 
             if (connected)
             {
-                // Temporarily unfreeze X for slide
                 Rigidbody2D rb = block.GetComponent<Rigidbody2D>();
                 if (rb != null)
                     rb.constraints = RigidbodyConstraints2D.FreezePositionY |
                                      RigidbodyConstraints2D.FreezeRotation;
 
-                // ✅ Slide X to align lowest point with highest point below
+                // Slide X to align
                 float xDiff = belowHighest.position.x - newLowest.position.x;
                 block.transform.position += new Vector3(xDiff, 0f, 0f);
-                Debug.Log("Slid X by: " + xDiff);
 
-                // Re-freeze
                 if (rb != null)
                     rb.constraints = RigidbodyConstraints2D.FreezeAll;
 
+                bool isPerfect = Mathf.Abs(xDiff) < perfectThreshold;
+                Debug.Log("isPerfect: " + isPerfect + " xDiff: " + xDiff.ToString("F3"));
+
+                // ✅ Show Perfect or Great text
+                if (LandingTextEffect.Instance != null)
+                {
+                    if (isPerfect)
+                        LandingTextEffect.Instance.ShowPerfect(block.transform.position);
+                    else
+                        LandingTextEffect.Instance.ShowGreat(block.transform.position);
+                }
+
+                // Award XP
+                STGameManager.Instance.BlockStacked(isPerfect);
+
+                // Add climb points to alien
                 if (alienClimber != null)
                     alienClimber.AddClimbPointsFromBlock(newBC);
             }
             else
             {
-                Debug.Log("No connection — X overlap: " + xOverlap.ToString("F3"));
+                Debug.Log("No connection!");
+
+                // ✅ Show Bad text
+                if (LandingTextEffect.Instance != null)
+                    LandingTextEffect.Instance.ShowBad(block.transform.position);
 
                 if (alienClimber != null)
                     alienClimber.OnConnectionFailed();

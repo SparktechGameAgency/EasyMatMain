@@ -8,9 +8,9 @@ namespace StackTower
     {
         public static STGameManager Instance;
 
-        [Header("Settings")]
-        public int maxMisses = 3;
-        public int pointsPerBlock = 10; // ✅ configurable points per block
+        [Header("XP Settings")]
+        public int perfectXP = 10;  // ✅ perfect land = +10
+        public int averageXP = 5;   // ✅ adjusted/slid land = +5
 
         [Header("Spawn Settings")]
         public float spawnDelay = 0.5f;
@@ -21,12 +21,13 @@ namespace StackTower
         [Header("References")]
         public Transform blockSpawnPoint;
         public Transform deathZone;
-        public TextMeshProUGUI scoreText; // ✅ back
-        public TextMeshProUGUI livesText;
+        public TextMeshProUGUI scoreText;        // shows XP
+        public TextMeshProUGUI blocksSpawnedText; // shows block count
         public GameObject gameOverPanel;
 
-        [HideInInspector] public int score = 0;
-        private int missCount = 0;
+        [HideInInspector] public int score = 0; // total XP
+        [HideInInspector] public int blocksSpawned = 0; // total blocks spawned
+
         private bool gameActive = true;
         private bool waitingToSpawn = false;
 
@@ -91,29 +92,30 @@ namespace StackTower
                 return;
             }
 
+            // ✅ Count every block spawned
+            blocksSpawned++;
+            UpdateUI();
+
             bc.Initialize(blockSpawnPoint, deathZone);
         }
 
         // ─── Normal block landed ─────────────────────────────────
-        public void BlockStacked()
+        // Called by TowerManager after connection check
+        public void BlockStacked(bool isPerfect)
         {
-            score += pointsPerBlock; // ✅ 10, 20, 30...
+            // ✅ Perfect = +10, Adjusted = +5
+            score += isPerfect ? perfectXP : averageXP;
             UpdateUI();
+            Debug.Log("XP awarded: " + (isPerfect ? perfectXP : averageXP) +
+                      " | isPerfect: " + isPerfect);
         }
 
         // ─── Normal block fell into void ─────────────────────────
+        // No lives system — just return block to pool
         public void BlockMissed(GameObject block)
         {
             ObjectPool.Instance.ReturnBlock(block);
-            missCount++;
-            UpdateUI();
-
-            if (missCount >= maxMisses)
-            {
-                GameOver();
-                if (!canGameOver)
-                    return;
-            }
+            // ✅ No lives deduction — just continue
         }
 
         // ─── Trap landed on tower ────────────────────────────────
@@ -145,15 +147,17 @@ namespace StackTower
 
         void UpdateUI()
         {
+            // ✅ XP display
             if (scoreText != null)
-                scoreText.text = score.ToString(); // ✅ just "10", "20", "30"
+                scoreText.text = score.ToString();
             else
                 Debug.LogWarning("STGameManager: scoreText not assigned!");
 
-            if (livesText != null)
-                livesText.text = "Lives: " + (maxMisses - missCount);
+            // ✅ Block count display
+            if (blocksSpawnedText != null)
+                blocksSpawnedText.text = blocksSpawned.ToString();
             else
-                Debug.LogWarning("STGameManager: livesText not assigned!");
+                Debug.LogWarning("STGameManager: blocksSpawnedText not assigned!");
         }
 
         void GameOver()
