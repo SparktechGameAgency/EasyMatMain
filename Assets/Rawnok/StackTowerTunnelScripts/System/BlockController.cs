@@ -77,6 +77,14 @@ namespace StackTower
 
         void Release()
         {
+            // ✅ Check if tap is in a blocked zone
+            if (InputBlocker.Instance != null)
+            {
+                Vector2 tapPos = Input.mousePosition;
+                if (InputBlocker.Instance.IsTapBlocked(tapPos))
+                    return; // ignore tap
+            }
+
             isRiding = false;
             rb.gravityScale = fallGravityScale;
             rb.constraints = RigidbodyConstraints2D.None;
@@ -130,8 +138,7 @@ namespace StackTower
             else
             {
                 gameObject.tag = "Block";
-                TowerManager.Instance.BlockLanded(gameObject);
-                STGameManager.Instance.BlockStacked();
+                TowerManager.Instance.BlockLanded(gameObject); // ✅ TowerManager handles score now
             }
         }
 
