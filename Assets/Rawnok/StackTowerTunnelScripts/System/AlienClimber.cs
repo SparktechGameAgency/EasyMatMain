@@ -12,27 +12,78 @@ namespace StackTower
         public float climbSpeed = 2f;
         public float reachThreshold = 0.1f;
 
+        [Header("Waiting Settings")]
+        [Tooltip("Alien stops and waits at this element index")]
+        public int waitingIndex = 1;
+
         [Header("Connection Fail Settings")]
         public float holdTimeOnFail = 2f;
 
         [Header("Death Animation")]
-        public Sprite[] deathSprites;  // ✅ drag sprites in order here
-        public float frameRate = 0.1f; // ✅ seconds per frame
-        public SpriteRenderer spriteRenderer;   // ✅ drag alien SpriteRenderer here
+        public Sprite[] deathSprites;
+        public float frameRate = 0.1f;
+        public SpriteRenderer spriteRenderer;
 
+        [Header("Fly Effect Settings")]
+        public float bobSpeed = 2f;
+        public float bobAmount = 0.08f;
+        public float wobbleSpeed = 1.5f;
+        public float wobbleAngle = 8f;
+        public float pulseSpeed = 2f;
+        public float pulseAmount = 0.04f;
+        public float leanSmoothing = 5f;
+        public float maxLeanAngle = 15f;
+
+        // ── Climb variables ──────────────────────────────────────
         private Queue<Transform> climbQueue = new Queue<Transform>();
         private Transform currentTarget = null;
         private bool isClimbing = false;
         private bool connectionFailed = false;
+        private Transform[] lastBlockClimbPoints = null;
+
+        // ── Fly effect variables ─────────────────────────────────
+        private Transform visualTransform;  // child visual transform
+        private bool hasChildVisual;   // true if sprite is on child GO
+        private Vector3 visualBaseLocalPos;
+        private Vector3 visualBaseScale;
+        private float timeOffset;
+        private Vector3 lastWorldPos;
+        private float currentLean;
 
         void Awake()
         {
             Instance = this;
             gameObject.SetActive(false);
 
-            // Auto find SpriteRenderer if not assigned
             if (spriteRenderer == null)
                 spriteRenderer = GetComponent<SpriteRenderer>();
+
+            // ✅ Check if sprite is on child or same GO
+            if (spriteRenderer != null && spriteRenderer.transform != transform)
+            {
+                // Sprite is on a CHILD — safe to bob local position
+                visualTransform = spriteRenderer.transform;
+                hasChildVisual = true;
+            }
+            else
+            {
+                // Sprite is on SAME GO — only rotate/scale, never touch localPosition
+                visualTransform = transform;
+                hasChildVisual = false;
+            }
+        }
+
+        void Start()
+        {
+            InitFlyEffect();
+        }
+
+        void InitFlyEffect()
+        {
+            visualBaseLocalPos = visualTransform.localPosition;
+            visualBaseScale = visualTransform.localScale;
+            timeOffset = Random.Range(0f, Mathf.PI * 2f);
+            lastWorldPos = transform.position;
         }
 
         public void Activate(Transform startPoint)
@@ -41,9 +92,9 @@ namespace StackTower
             transform.position = startPoint.position;
             isClimbing = true;
 
-            Debug.Log("Alien activated at: " + startPoint.position);
-            Debug.Log("Points in queue: " + climbQueue.Count);
+            InitFlyEffect();
 
+            Debug.Log("Alien activated at: " + startPoint.position);
             TryDequeueNext();
         }
 
@@ -51,7 +102,9 @@ namespace StackTower
         {
             if (block == null || block.climbPoints == null) return;
 
-            for (int i = block.climbPoints.Length - 1; i >= 0; i--)
+            lastBlockClimbPoints = block.climbPoints;
+
+            for (int i = block.climbPoints.Length - 1; i >= waitingIndex; i--)
             {
                 Transform point = block.climbPoints[i];
                 if (point != null)
@@ -68,25 +121,70 @@ namespace StackTower
         public void OnConnectionFailed()
         {
             connectionFailed = true;
-            Debug.Log("Connection failed! Alien will hold then play death animation.");
+            Debug.Log("Connection failed! Alien climbing to top then game over.");
+
+            if (lastBlockClimbPoints != null)
+            {
+                for (int i = waitingIndex - 1; i >= 0; i--)
+                {
+                    Transform point = lastBlockClimbPoints[i];
+                    if (point != null)
+                        climbQueue.Enqueue(point);
+                }
+            }
 
             if (isClimbing && currentTarget == null)
-                StartCoroutine(HoldThenDie());
+                TryDequeueNext();
         }
 
         void Update()
         {
-            if (!isClimbing || currentTarget == null) return;
+            // ── Climbing ─────────────────────────────────────────
+            if (isClimbing && currentTarget != null)
+            {
+                transform.position = Vector3.MoveTowards(
+                    transform.position,
+                    currentTarget.position,
+                    climbSpeed * Time.deltaTime
+                );
 
-            transform.position = Vector3.MoveTowards(
-                transform.position,
-                currentTarget.position,
-                climbSpeed * Time.deltaTime
-            );
+                float dist = Vector3.Distance(transform.position, currentTarget.position);
+                if (dist <= reachThreshold)
+                    OnReachedTarget();
+            }
 
-            float dist = Vector3.Distance(transform.position, currentTarget.position);
-            if (dist <= reachThreshold)
-                OnReachedTarget();
+            // ── Fly Effect ───────────────────────────────────────
+            ApplyFlyEffect();
+        }
+
+        void ApplyFlyEffect()
+        {
+            // Movement lean calculation
+            Vector3 velocity = (transform.position - lastWorldPos) / Time.deltaTime;
+            lastWorldPos = transform.position;
+
+            float targetLean = Mathf.Clamp(-velocity.x * 2f, -maxLeanAngle, maxLeanAngle);
+            currentLean = Mathf.Lerp(currentLean, targetLean, leanSmoothing * Time.deltaTime);
+
+            // ✅ Bob — ONLY if sprite is on a child GO
+            // Prevents conflict with MoveTowards world position
+            if (hasChildVisual)
+            {
+                float bobOffset = Mathf.Sin(Time.time * bobSpeed + timeOffset) * bobAmount;
+                visualTransform.localPosition = new Vector3(
+                    visualBaseLocalPos.x,
+                    visualBaseLocalPos.y + bobOffset,
+                    visualBaseLocalPos.z
+                );
+            }
+
+            // ✅ Rotation — safe on both child and same GO
+            float wobble = Mathf.Sin(Time.time * wobbleSpeed + timeOffset) * wobbleAngle;
+            visualTransform.localRotation = Quaternion.Euler(0f, 0f, wobble + currentLean);
+
+            // ✅ Scale pulse — safe on both child and same GO
+            float pulse = 1f + Mathf.Sin(Time.time * pulseSpeed + timeOffset) * pulseAmount;
+            visualTransform.localScale = visualBaseScale * pulse;
         }
 
         void OnReachedTarget()
@@ -105,17 +203,15 @@ namespace StackTower
                 if (connectionFailed)
                     StartCoroutine(HoldThenDie());
                 else
-                    Debug.Log("Alien waiting for next block...");
+                    Debug.Log("Alien waiting at index " + waitingIndex + " for next block...");
             }
         }
 
         IEnumerator HoldThenDie()
         {
-            // ── Hold at current position ─────────────────────────
             Debug.Log("Alien holding for " + holdTimeOnFail + " seconds...");
             yield return new WaitForSeconds(holdTimeOnFail);
 
-            // ── Play death sprite animation ───────────────────────
             if (deathSprites != null && deathSprites.Length > 0 && spriteRenderer != null)
             {
                 Debug.Log("Playing death animation...");
@@ -126,7 +222,6 @@ namespace StackTower
                 Debug.LogWarning("AlienClimber: deathSprites or spriteRenderer not assigned!");
             }
 
-            // ── Game over immediately after animation ─────────────
             Debug.Log("Death animation done — Game Over!");
             STGameManager.Instance.AlienReachedTop();
         }
@@ -158,6 +253,7 @@ namespace StackTower
             isClimbing = false;
             connectionFailed = false;
             currentTarget = null;
+            lastBlockClimbPoints = null;
             climbQueue.Clear();
             StopAllCoroutines();
         }

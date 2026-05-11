@@ -12,6 +12,9 @@ namespace StackTower
         public int perfectXP = 10;  // ✅ perfect land = +10
         public int averageXP = 5;   // ✅ adjusted/slid land = +5
 
+        [Header("Input Lock")]
+        [HideInInspector] public bool isInputLocked = false;
+
         [Header("Spawn Settings")]
         public float spawnDelay = 0.5f;
 
@@ -30,8 +33,19 @@ namespace StackTower
 
         private bool gameActive = true;
         private bool waitingToSpawn = false;
+        // Call these from your Settings Panel open/close
+        public void LockInput() => isInputLocked = true;
+        public void UnlockInput() => StartCoroutine(UnlockAfterDelay());
 
         void Awake() => Instance = this;
+
+        IEnumerator UnlockAfterDelay()
+        {
+            // ✅ Wait one frame so the closing tap doesn't drop the block
+            yield return new WaitForEndOfFrame();
+            yield return new WaitForEndOfFrame(); // two frames to be safe
+            isInputLocked = false;
+        }
 
         void Start()
         {

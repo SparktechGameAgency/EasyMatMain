@@ -287,8 +287,8 @@ MonoBehaviour:
   - {fileID: 1516007352054016294}
   - {fileID: 3193124227860411400}
   - {fileID: 1210197222118387091}
-  fallGravityScale: 3
-  maxFallSpeed: 10
+  fallGravityScale: 5
+  maxFallSpeed: 20
   settleVelocity: 0.15
   settleAngular: 10
   settleTime: 0.25

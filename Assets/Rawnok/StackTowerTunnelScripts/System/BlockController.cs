@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace StackTower
 {
@@ -77,13 +78,13 @@ namespace StackTower
 
         void Release()
         {
-            // ✅ Check if tap is in a blocked zone
-            if (InputBlocker.Instance != null)
-            {
-                Vector2 tapPos = Input.mousePosition;
-                if (InputBlocker.Instance.IsTapBlocked(tapPos))
-                    return; // ignore tap
-            }
+            // ✅ Block input if locked (settings panel just closed)
+            if (STGameManager.Instance != null && STGameManager.Instance.isInputLocked)
+                return;
+
+            // Block if tap is over UI element
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+                return;
 
             isRiding = false;
             rb.gravityScale = fallGravityScale;
