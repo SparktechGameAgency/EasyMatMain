@@ -16,7 +16,6 @@ public class LeaderboardManager : MonoBehaviour
     private FirebaseFirestore db;
     private List<GameObject> spawnedRows = new List<GameObject>();
 
-    // ── REPLACE YOUR OLD OnEnable WITH THIS ────────────────────────
     void OnEnable()
     {
         StartCoroutine(LoadAfterDelay());
@@ -24,18 +23,15 @@ public class LeaderboardManager : MonoBehaviour
 
     IEnumerator LoadAfterDelay()
     {
-        // Wait for Firebase Auth to be ready
         yield return new WaitForSeconds(0.5f);
         db = FirebaseFirestore.DefaultInstance;
         LoadLeaderboard();
     }
 
-    // ── LOAD ALL USERS ─────────────────────────────────────────────
     public void LoadLeaderboard()
     {
         if (db == null) db = FirebaseFirestore.DefaultInstance;
 
-        // ── Check logged in ────────────────────────────────────────
         var auth = Firebase.Auth.FirebaseAuth.DefaultInstance;
         if (auth.CurrentUser == null)
         {
@@ -45,7 +41,6 @@ public class LeaderboardManager : MonoBehaviour
 
         Debug.Log("✅ Logged in as: " + auth.CurrentUser.Email);
 
-        // Clear old rows
         foreach (var row in spawnedRows)
             Destroy(row);
         spawnedRows.Clear();
@@ -53,7 +48,7 @@ public class LeaderboardManager : MonoBehaviour
         Debug.Log("Loading leaderboard...");
 
         db.Collection("users")
-          //.OrderByDescending("xp")
+          .OrderByDescending("xp")
           .GetSnapshotAsync()
           .ContinueWith(task =>
           {
@@ -61,11 +56,18 @@ public class LeaderboardManager : MonoBehaviour
               {
                   if (task.IsFaulted)
                   {
-                      Debug.LogError("Leaderboard failed: " + task.Exception);
+                      Debug.LogError("❌ Leaderboard failed: " + task.Exception);
                       return;
                   }
 
-                  List<DocumentSnapshot> users = task.Result.Documents.ToList();
+                  List<DocumentSnapshot> users = task.Result.Documents
+                      .OrderByDescending(doc =>
+                      {
+                          doc.TryGetValue("xp", out long xp);
+                          return xp;
+                      })
+                      .ToList();
+
                   Debug.Log("✅ Users loaded: " + users.Count);
 
                   for (int i = 0; i < users.Count; i++)
@@ -76,43 +78,60 @@ public class LeaderboardManager : MonoBehaviour
           });
     }
 
-    // ── SPAWN ONE ROW PER USER ─────────────────────────────────────
     void SpawnRow(DocumentSnapshot doc, int rank)
     {
-        if (playerRowPrefab == null || listContainer == null) return;
+        // ✅ Null check for prefab and container
+        if (playerRowPrefab == null || listContainer == null)
+        {
+            Debug.LogError("❌ playerRowPrefab or listContainer is null!");
+            return;
+        }
 
-        doc.TryGetValue("username", out string username);
-        doc.TryGetValue("xp", out long xp);
-        doc.TryGetValue("profilePicUrl", out string picUrl);
+        // ✅ Safe defaults — no null crash
+        string username = "Unknown";
+        long xp = 0;
+        string picUrl = "";
+
+        if (doc.ContainsField("username")) doc.TryGetValue("username", out username);
+        if (doc.ContainsField("xp")) doc.TryGetValue("xp", out xp);
+        if (doc.ContainsField("profilePicUrl")) doc.TryGetValue("profilePicUrl", out picUrl);
+
+        // ✅ Extra null safety
+        if (string.IsNullOrEmpty(username)) username = "Unknown";
+        if (string.IsNullOrEmpty(picUrl)) picUrl = "";
 
         GameObject row = Instantiate(playerRowPrefab, listContainer);
+        if (row == null) return;
         spawnedRows.Add(row);
 
+        // ✅ Safe UI find
         TMP_Text rankText = row.transform.Find("RankBadge/RankText")?.GetComponent<TMP_Text>();
         TMP_Text nameText = row.transform.Find("UsernameText")?.GetComponent<TMP_Text>();
         TMP_Text xpText = row.transform.Find("XPText")?.GetComponent<TMP_Text>();
         Image profileImage = row.transform.Find("ProfileImage")?.GetComponent<Image>();
 
-        if (rankText) rankText.text = rank.ToString();
-        if (nameText) nameText.text = username ?? "Unknown";
-        if (xpText) xpText.text = xp + " XP";
+        // ✅ Null check before assigning text
+        if (rankText != null) rankText.text = rank.ToString();
+        if (nameText != null) nameText.text = username;
+        if (xpText != null) xpText.text = xp + " XP";
 
-        if (rankText)
+        // ✅ Rank badge color
+        if (rankText != null)
         {
             rankText.color = rank switch
             {
-                1 => new Color(1f, 0.84f, 0f, 1f),
-                2 => new Color(0.75f, 0.75f, 0.75f, 1f),
-                3 => new Color(0.8f, 0.5f, 0.2f, 1f),
+                1 => new Color(1f, 0.84f, 0f, 1f),   // Gold
+                2 => new Color(0.75f, 0.75f, 0.75f, 1f), // Silver
+                3 => new Color(0.8f, 0.5f, 0.2f, 1f),    // Bronze
                 _ => Color.white
             };
         }
 
+        // ✅ Only load image if URL is valid
         if (profileImage != null && !string.IsNullOrEmpty(picUrl))
             StartCoroutine(LoadImageFromUrl(picUrl, profileImage));
     }
 
-    // ── LOAD IMAGE FROM URL ────────────────────────────────────────
     IEnumerator LoadImageFromUrl(string url, Image targetImage)
     {
         using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
@@ -121,7 +140,7 @@ public class LeaderboardManager : MonoBehaviour
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning("Failed to load image: " + request.error);
+                Debug.LogWarning("⚠️ Failed to load image: " + request.error);
                 yield break;
             }
 

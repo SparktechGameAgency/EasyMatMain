@@ -180,15 +180,14 @@ public class GameManager : MonoBehaviour
 
     private void GameOver()
     {
+        PlayerXPManager.SaveScore(score); // ✅ ADD THIS LINE
+
         if (gameOverPanel) gameOverPanel.SetActive(true);
         if (scoreText) scoreText.gameObject.SetActive(false);
         if (livesText) livesText.gameObject.SetActive(false);
-
         if (finalScoreText)
             finalScoreText.text = "Final Score: " + score;
-
         Time.timeScale = 0f;
-
         if (audiomanager.Instance != null)
             audiomanager.Instance.StopMusic();
     }

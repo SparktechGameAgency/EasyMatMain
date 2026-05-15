@@ -201,14 +201,31 @@ public class Snake : MonoBehaviour
                 snakeMovePositionList.RemoveAt(snakeMovePositionList.Count - 1);
             }
 
+            /* foreach (SnakeBodyPart snakeBodyPart in snakeBodyPartList)
+             {
+                 Vector2Int snakeBodyPartGridPosition = snakeBodyPart.GetGridPosition();
+                 if (gridPosotion == snakeBodyPartGridPosition)
+                 {
+                     // Game Over
+                     state = State.Dead;
+                     //GameHandler.SnakeDied();
+                     if (gameOverWindow != null)
+                         gameOverWindow.ShowGameOver();
+                     return;
+                 }
+             }*/
+
             foreach (SnakeBodyPart snakeBodyPart in snakeBodyPartList)
             {
                 Vector2Int snakeBodyPartGridPosition = snakeBodyPart.GetGridPosition();
                 if (gridPosotion == snakeBodyPartGridPosition)
                 {
-                    // Game Over
                     state = State.Dead;
-                    //GameHandler.SnakeDied();
+
+                    // ? Save score to Firestore
+                    if (GameHandler.instance != null)
+                        GameHandler.instance.TriggerGameOver();
+
                     if (gameOverWindow != null)
                         gameOverWindow.ShowGameOver();
                     return;
@@ -481,6 +498,10 @@ public class Snake : MonoBehaviour
     public void ForceGameOver()
     {
         state = State.Dead;
+
+        // ? Save score to Firestore
+        if (GameHandler.instance != null)
+            GameHandler.instance.TriggerGameOver();
 
         if (gameOverWindow != null)
             gameOverWindow.ShowGameOver();

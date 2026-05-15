@@ -203,4 +203,12 @@ public class GameHandler : MonoBehaviour
     {
         instance?.metalAppleWarningText?.gameObject.SetActive(false);
     }
+
+
+    // ✅ Add this new method to GameHandler
+    public void TriggerGameOver()
+    {
+        PlayerXPManager.SaveScore(score); // ✅ ADD THIS LINE
+        Debug.Log("✅ Snake score saved: " + score);
+    }
 }

@@ -308,31 +308,24 @@ public class ChixGameManager : MonoBehaviour
     }
 
 
-
     public void TriggerGameOver()
     {
         if (gameOverPanel == null) return;
         if (gameOverPanel.activeSelf) return;
 
-        // --- THE FIX: Update the text before showing the panel ---
+        PlayerXPManager.SaveScore(score); // ? ADD THIS LINE
+
         if (finalScoreText != null)
-        {
             finalScoreText.text = "Final Score: " + score.ToString();
-        }
-
         if (spawnManager != null) spawnManager.StopSpawning();
-
         gameOverPanel.SetActive(true);
-
-        // Animate the panel
         gameOverPanel.transform.localScale = Vector3.zero;
         gameOverPanel.transform.DOScale(Vector3.one, 0.5f)
             .SetEase(Ease.OutBack)
             .SetUpdate(true);
-
         Time.timeScale = 0f;
     }
-   
+
 
     public void EndBossFight(bool victory = true)
     {
