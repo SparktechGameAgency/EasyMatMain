@@ -15,8 +15,8 @@ EditorBuildSettings:
     path: Assets/Scenes/SnakeGame.unity
     guid: 1f216790258182b49966c909074d1d63
   - enabled: 1
-    path: Assets/Scenes/StackTower.unity
-    guid: d4d729ac5654d804abe7adf0c43e344b
+    path: Assets/Scenes/StackTowerTunnel.unity
+    guid: fbf9f9955576743419ff6b8dba1695c5
   - enabled: 1
     path: Assets/Scenes/CHIX.unity
     guid: 89ddc37dc528f8a41818d07118349b9f

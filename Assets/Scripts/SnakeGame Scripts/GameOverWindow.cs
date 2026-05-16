@@ -89,6 +89,21 @@ public class GameOverWindow : MonoBehaviour
         if (!string.IsNullOrEmpty(sceneName))
         {
             Time.timeScale = 1f;
+
+            // ✅ Save auth session
+            var user = Firebase.Auth.FirebaseAuth.DefaultInstance.CurrentUser;
+            if (user != null)
+            {
+                PlayerPrefs.SetString("LoggedInUID", user.UserId);
+                PlayerPrefs.SetString("LoggedInEmail", user.Email);
+            }
+
+            // ✅ Set static flag
+            FirebaseAuthManager.returningFromGame = true;
+
+            // already existed
+            PlayerPrefs.SetString("OpenPanel", "AllGamePanel");
+            PlayerPrefs.Save();
             SceneManager.LoadScene(sceneName);
         }
     }

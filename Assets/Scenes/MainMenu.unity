@@ -35982,6 +35982,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1557479878}
   - component: {fileID: 1557479877}
+  - component: {fileID: 1557479879}
+  - component: {fileID: 1557479880}
   m_Layer: 0
   m_Name: GameObject
   m_TagString: Untagged
@@ -36016,6 +36018,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1557479879
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1557479876}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67435852b9a17f5419e4d552e99099e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &1557479880
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1557479876}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fed6aaba240e21b45b65dadab374cfd5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  HomePanel: {fileID: 5776353813036075325}
+  LoginPanel: {fileID: 371658006}
+  LeaderBoardPanel: {fileID: 484369773}
+  AllGamePanel: {fileID: 1514351856302324648}
+  RegisterPanel: {fileID: 804843809}
+  SettingsPanel: {fileID: 7831682436459864518}
 --- !u!1 &1561890061
 GameObject:
   m_ObjectHideFlags: 0
@@ -36165,7 +36197,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1567066631
 RectTransform:
   m_ObjectHideFlags: 0
@@ -43727,7 +43759,6 @@ GameObject:
   - component: {fileID: 1878617882}
   - component: {fileID: 1878617881}
   - component: {fileID: 1878617880}
-  - component: {fileID: 1878617884}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -43820,18 +43851,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
---- !u!114 &1878617884
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1878617879}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 67435852b9a17f5419e4d552e99099e8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &1879229227
 GameObject:
   m_ObjectHideFlags: 0
@@ -47602,7 +47621,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 1
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -47629,7 +47648,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 49.9
+  m_fontSize: 36
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -62305,7 +62324,7 @@ MonoBehaviour:
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
-          m_StringArgument: StackTower
+          m_StringArgument: StackTowerTunnel
           m_BoolArgument: 0
         m_CallState: 2
 --- !u!222 &8705320504840602284

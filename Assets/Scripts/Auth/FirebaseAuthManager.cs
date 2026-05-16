@@ -40,6 +40,9 @@ public class FirebaseAuthManager : MonoBehaviour
     public TMP_InputField reg_ConfirmPassword;
     public TMP_Text reg_Status;
     public Button reg_ConfirmButton;
+    public static bool returningFromGame = false;
+
+
 
     [Header("── HOMEPAGE & PROFILE ──")]
     public TMP_Text home_UsernameText;       // username text on top card
@@ -65,7 +68,22 @@ public class FirebaseAuthManager : MonoBehaviour
     // ── START ──────────────────────────────────────────────────────
     void Start()
     {
-        ShowPanel("login");
+        // ✅ Use static flag instead of PlayerPrefs
+        bool panelRouterHandling = FirebaseAuthManager.returningFromGame;
+        FirebaseAuthManager.returningFromGame = false; // reset after reading
+
+        if (!panelRouterHandling)
+        {
+            ShowPanel("login");
+        }
+        else
+        {
+            // ✅ Hide all auth panels
+            if (loginPanel) loginPanel.SetActive(false);
+            if (registerPanel) registerPanel.SetActive(false);
+            if (homepagePanel) homepagePanel.SetActive(false);
+        }
+
         SetLoginConfirmInteractable(false);
         SetRegisterConfirmInteractable(false);
         SetLoginStatus("Initializing...");
@@ -80,12 +98,21 @@ public class FirebaseAuthManager : MonoBehaviour
                     db = FirebaseFirestore.DefaultInstance;
                     storage = FirebaseStorage.DefaultInstance;
                     storageRef = storage.RootReference;
-
                     firebaseReady = true;
+
                     Debug.Log("✅ Firebase Ready!");
                     SetLoginConfirmInteractable(true);
                     SetRegisterConfirmInteractable(true);
-                    SetLoginStatus("Please login or register.");
+
+                    if (panelRouterHandling && auth.CurrentUser != null)
+                    {
+                        Debug.Log("✅ Returning from game — loading silently.");
+                        StartCoroutine(LoadUserDataSilentlyDelayed(auth.CurrentUser));
+                    }
+                    else
+                    {
+                        SetLoginStatus("Please login or register.");
+                    }
                 }
                 else
                 {
@@ -94,6 +121,59 @@ public class FirebaseAuthManager : MonoBehaviour
                 }
             });
         });
+    }
+
+    IEnumerator LoadUserDataSilentlyDelayed(FirebaseUser user)
+    {
+        yield return new WaitForSeconds(1f);
+        LoadUserDataSilently(user);
+    }
+
+    void LoadUserDataSilently(FirebaseUser user)
+    {
+        db.Collection("users").Document(user.UserId).GetSnapshotAsync()
+            .ContinueWith(task =>
+            {
+                UnityMainThreadDispatcher.Instance().Enqueue(() =>
+                {
+                    string displayUsername = user.DisplayName ?? "";
+                    string displayEmail = user.Email ?? "";
+                    string displayPhone = "";
+
+                    if (!task.IsFaulted && task.Result.Exists)
+                    {
+                        if (task.Result.TryGetValue("username", out string fsUsername)
+                            && !string.IsNullOrEmpty(fsUsername))
+                            displayUsername = fsUsername;
+
+                        if (task.Result.TryGetValue("phone", out string fsPhone))
+                            displayPhone = fsPhone;
+                    }
+
+                    if (string.IsNullOrEmpty(displayUsername))
+                        displayUsername = user.Email ?? "";
+
+                    // ✅ Update all UI texts
+                    if (home_UsernameText != null) home_UsernameText.text = displayUsername;
+                    if (home_TopUsername != null) home_TopUsername.text = displayUsername;
+                    if (profile_Username != null) profile_Username.text = displayUsername;
+                    if (profile_Email != null) profile_Email.text = displayEmail;
+                    if (profile_Phone != null) profile_Phone.text = displayPhone;
+
+                    // ✅ All Game Panel
+                    if (allGame_UsernameText != null) allGame_UsernameText.text = displayUsername;
+
+                    // ✅ Visohunt Panel
+                    if (visoHunt_UsernameText != null) visoHunt_UsernameText.text = displayUsername;
+
+                    // ✅ Load profile picture
+                    if (!task.IsFaulted && task.Result.Exists)
+                        LoadSavedProfilePicture(task.Result);
+
+                    Debug.Log("✅ User data loaded silently for: " + displayUsername);
+                    // ✅ NO ShowPanel call here — PanelRouter handles it
+                });
+            });
     }
 
     // ── LOGIN CONFIRM ──────────────────────────────────────────────

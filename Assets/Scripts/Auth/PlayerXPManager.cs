@@ -14,23 +14,16 @@ public class PlayerXPManager : MonoBehaviour
     private bool firebaseReady = false;
     private List<int> pendingScores = new List<int>();
 
-    public static PlayerXPManager GetOrCreate()
-    {
-        if (Instance != null) return Instance;
-        GameObject go = new GameObject("PlayerXPManager");
-        Instance = go.AddComponent<PlayerXPManager>();
-        return Instance;
-    }
-
     void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
+            // ? Detach from any parent to make it root
             transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
-            Debug.Log("? PlayerXPManager created.");
-            StartCoroutine(InitFirebaseCoroutine());
+            Debug.Log("? PlayerXPManager instance created at root.");
+            StartCoroutine(InitFirebase());
         }
         else if (Instance != this)
         {
@@ -38,37 +31,33 @@ public class PlayerXPManager : MonoBehaviour
         }
     }
 
-    // ? Coroutine keeps retrying until Firebase is ready
-    IEnumerator InitFirebaseCoroutine()
+    IEnumerator InitFirebase()
     {
-        Debug.Log("? Waiting for Firebase...");
+        Debug.Log("? Initializing Firebase...");
 
-        var dependencyTask = FirebaseApp.CheckAndFixDependenciesAsync();
+        var task = FirebaseApp.CheckAndFixDependenciesAsync();
+        yield return new WaitUntil(() => task.IsCompleted);
 
-        // Wait until task is done
-        yield return new WaitUntil(() => dependencyTask.IsCompleted);
-
-        if (dependencyTask.Result == DependencyStatus.Available)
+        if (task.Result == DependencyStatus.Available)
         {
             db = FirebaseFirestore.DefaultInstance;
             auth = FirebaseAuth.DefaultInstance;
             firebaseReady = true;
-            Debug.Log("? Firebase ready!");
+            Debug.Log("? Firebase ready in PlayerXPManager!");
 
-            // ? Flush any scores that came in before Firebase was ready
+            // ? Flush pending scores
             if (pendingScores.Count > 0)
             {
-                Debug.Log("?? Flushing " + pendingScores.Count + " queued score(s)...");
-                foreach (int pending in pendingScores)
-                {
-                    AddScoreToFirestore(pending);
-                }
+                Debug.Log("?? Flushing " + pendingScores.Count + " pending score(s)...");
+                List<int> toFlush = new List<int>(pendingScores);
                 pendingScores.Clear();
+                foreach (int s in toFlush)
+                    AddScoreToFirestore(s);
             }
         }
         else
         {
-            Debug.LogError("? Firebase failed: " + dependencyTask.Result);
+            Debug.LogError("? Firebase failed: " + task.Result);
         }
     }
 
@@ -78,8 +67,9 @@ public class PlayerXPManager : MonoBehaviour
 
         if (Instance == null)
         {
-            Debug.LogWarning("?? Instance null — creating.");
-            GetOrCreate();
+            Debug.LogWarning("?? Creating PlayerXPManager on the fly...");
+            GameObject go = new GameObject("PlayerXPManager");
+            go.AddComponent<PlayerXPManager>();
         }
 
         Instance.AddScoreToFirestore(gameScore);
@@ -93,10 +83,9 @@ public class PlayerXPManager : MonoBehaviour
             return;
         }
 
-        // ? Queue and wait — coroutine will flush it
         if (!firebaseReady)
         {
-            Debug.LogWarning("? Firebase not ready — queuing: " + gameScore);
+            Debug.LogWarning("? Queuing score: " + gameScore);
             pendingScores.Add(gameScore);
             return;
         }
@@ -108,43 +97,53 @@ public class PlayerXPManager : MonoBehaviour
         }
 
         string uid = auth.CurrentUser.UserId;
-        Debug.Log("?? Saving for UID: " + uid);
+        Debug.Log("?? UID: " + uid);
+
+        // ? Use coroutine instead of ContinueWith
+        StartCoroutine(SaveScoreCoroutine(uid, gameScore));
+    }
+
+    IEnumerator SaveScoreCoroutine(string uid, int gameScore)
+    {
+        Debug.Log("?? Reading current XP...");
 
         DocumentReference userRef = db.Collection("users").Document(uid);
 
-        userRef.GetSnapshotAsync().ContinueWith(task =>
+        // ?? Read current XP ???????????????????????????????????????
+        var readTask = userRef.GetSnapshotAsync();
+        yield return new WaitUntil(() => readTask.IsCompleted);
+
+        if (readTask.IsFaulted)
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(() =>
-            {
-                if (task.IsFaulted)
-                {
-                    Debug.LogError("? Read failed: " + task.Exception);
-                    return;
-                }
+            Debug.LogError("? Read failed: " + readTask.Exception);
+            yield break;
+        }
 
-                long currentXP = 0;
-                if (task.Result.ContainsField("xp"))
-                    task.Result.TryGetValue("xp", out currentXP);
+        if (!readTask.Result.Exists)
+        {
+            Debug.LogError("? User document not found for UID: " + uid);
+            yield break;
+        }
 
-                long newXP = currentXP + gameScore;
-                Debug.Log("?? " + currentXP + " + " + gameScore + " = " + newXP);
+        long currentXP = 0;
+        if (readTask.Result.ContainsField("xp"))
+            readTask.Result.TryGetValue("xp", out currentXP);
 
-                var data = new Dictionary<string, object>
-                {
-                    { "xp", newXP }
-                };
+        long newXP = currentXP + gameScore;
+        Debug.Log("?? " + currentXP + " + " + gameScore + " = " + newXP);
 
-                userRef.SetAsync(data, SetOptions.MergeAll).ContinueWith(updateTask =>
-                {
-                    UnityMainThreadDispatcher.Instance().Enqueue(() =>
-                    {
-                        if (updateTask.IsFaulted)
-                            Debug.LogError("? Save failed: " + updateTask.Exception);
-                        else
-                            Debug.Log("? XP saved! +" + gameScore + " ? Total: " + newXP);
-                    });
-                });
-            });
-        });
+        // ?? Write new XP ??????????????????????????????????????????
+        var data = new Dictionary<string, object>
+    {
+        { "xp", newXP }
+    };
+
+        var writeTask = userRef.SetAsync(data, SetOptions.MergeAll);
+        yield return new WaitUntil(() => writeTask.IsCompleted);
+
+        if (writeTask.IsFaulted)
+            Debug.LogError("? Save failed: " + writeTask.Exception);
+        else
+            Debug.Log("? XP saved! +" + gameScore + " ? Total: " + newXP);
     }
 }

@@ -4,13 +4,12 @@ public class PlayerXPManagerBootstrap : MonoBehaviour
 {
     void Awake()
     {
-        // ? Create PlayerXPManager if it doesn't exist yet
         if (PlayerXPManager.Instance == null)
         {
+            // ✅ Create as a brand new root object
             GameObject go = new GameObject("PlayerXPManager");
             go.AddComponent<PlayerXPManager>();
-            // DontDestroyOnLoad is handled inside PlayerXPManager.Awake()
-            Debug.Log("? PlayerXPManager bootstrapped.");
+            Debug.Log("✅ PlayerXPManager bootstrapped from root.");
         }
     }
 }

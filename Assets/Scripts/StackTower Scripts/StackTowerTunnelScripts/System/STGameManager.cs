@@ -179,12 +179,15 @@ namespace StackTower
             if (!canGameOver) return;
 
             gameActive = false;
+
+            // ✅ ADD THIS LINE
+            PlayerXPManager.SaveScore(score);
+
             Time.timeScale = 0f;
 
             if (gameOverPanel != null)
                 gameOverPanel.SetActive(true);
         }
-
         public void RestartGame()
         {
             Time.timeScale = 1f;

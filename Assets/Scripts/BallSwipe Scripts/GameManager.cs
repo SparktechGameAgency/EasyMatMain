@@ -180,6 +180,7 @@ public class GameManager : MonoBehaviour
 
     private void GameOver()
     {
+        Debug.Log("🎮 GameOver Score = " + score); // ← ADD THIS
         PlayerXPManager.SaveScore(score); // ✅ ADD THIS LINE
 
         if (gameOverPanel) gameOverPanel.SetActive(true);

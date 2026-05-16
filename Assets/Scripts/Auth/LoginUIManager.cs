@@ -1,7 +1,5 @@
 using UnityEngine;
-using Firebase;
 using Firebase.Auth;
-using Firebase.Extensions;
 
 public class LoginUIManager : MonoBehaviour
 {
@@ -9,32 +7,35 @@ public class LoginUIManager : MonoBehaviour
     public GameObject loginPanel;
     public GameObject homePanel;
 
-    private FirebaseAuth auth;
+    void Awake()
+    {
+        // ✅ Force hide both immediately in Awake (before Start)
+        if (loginPanel != null) loginPanel.SetActive(false);
+        if (homePanel != null) homePanel.SetActive(false);
+    }
 
     void Start()
     {
-        auth = FirebaseAuth.DefaultInstance;
-
-        // ? Hide both first to avoid flicker
-        if (loginPanel != null) loginPanel.SetActive(false);
-        if (homePanel != null) homePanel.SetActive(false);
-
-        // ? Check Firebase is ready then check login state
-        FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task =>
+        // ✅ If PanelRouter is handling this, do nothing
+        string targetPanel = PlayerPrefs.GetString("OpenPanel", "");
+        if (!string.IsNullOrEmpty(targetPanel))
         {
-            if (auth.CurrentUser != null)
-            {
-                // Already logged in ? go straight to Home
-                Debug.Log("? Already logged in: " + auth.CurrentUser.Email);
-                GoToHome();
-            }
-            else
-            {
-                // Not logged in ? show Login
-                Debug.Log("?? Not logged in ? showing login panel");
-                GoToLogin();
-            }
-        });
+            Debug.Log("✅ PanelRouter is handling navigation — LoginUIManager stepping back.");
+            return;
+        }
+
+        // Normal flow — check login state
+        var user = FirebaseAuth.DefaultInstance.CurrentUser;
+        if (user != null)
+        {
+            Debug.Log("✅ Already logged in → HomePanel");
+            GoToHome();
+        }
+        else
+        {
+            Debug.Log("🔒 Not logged in → LoginPanel");
+            GoToLogin();
+        }
     }
 
     public void GoToHome()
@@ -49,10 +50,15 @@ public class LoginUIManager : MonoBehaviour
         if (loginPanel != null) loginPanel.SetActive(true);
     }
 
-    // ? Call this from your Logout button
     public void Logout()
     {
-        auth.SignOut();
+        // ✅ Clear saved session on real logout
+        PlayerPrefs.DeleteKey("LoggedInUID");
+        PlayerPrefs.DeleteKey("LoggedInEmail");
+        PlayerPrefs.DeleteKey("OpenPanel");
+        PlayerPrefs.Save();
+
+        FirebaseAuth.DefaultInstance.SignOut();
         GoToLogin();
     }
 }
