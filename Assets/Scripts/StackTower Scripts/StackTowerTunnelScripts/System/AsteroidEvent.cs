@@ -19,15 +19,15 @@ namespace StackTower
         public float countdownDuration = 15f;
 
         [Header("Warning Settings")]
-        public Image warningImage;
-        public Sprite[] warningSprites;          // ✅ warning animation frames
-        public float warningFrameRate = 0.1f;    // ✅ warning animation speed
-        public float warningDuration = 3f;
-        public float warningFadeSpeed = 2f;
+        public Image warningImage;           // ✅ separate warning sprite in canvas
+        public Sprite[] warningSprites;      // ✅ warning animation frames
+        public float warningFrameRate = 0.1f; // ✅ warning animation speed
+        public float warningDuration = 3f;   // ✅ how long warning flashes (seconds)
+        public float warningFadeSpeed = 2f;  // ✅ how fast it fades in/out
 
         [Header("Event UI")]
-        public TextMeshProUGUI countdownText;
-        public TextMeshProUGUI blockRequirementText;
+        public TextMeshProUGUI countdownText;        // countdown timer TMP
+        public TextMeshProUGUI blockRequirementText; // ✅ blocks needed TMP
 
         [Header("Asteroid Animation")]
         public Image asteroidImage;
@@ -39,6 +39,10 @@ namespace StackTower
         private int blocksRequired = 0;
         private int blocksPlaced = 0;
         private float countdownTimer = 0f;
+        private bool isCountdownFrozen = false; // ✅ ability freeze flag
+
+        // ✅ Read-only for AbilityButton
+        public bool IsEventActive => isEventActive;
 
         void Awake() => Instance = this;
 
@@ -64,8 +68,12 @@ namespace StackTower
         {
             if (!isEventActive) return;
 
-            countdownTimer -= Time.deltaTime;
-            UpdateEventUI();
+            // ✅ Don't tick countdown while frozen by ability
+            if (!isCountdownFrozen)
+            {
+                countdownTimer -= Time.deltaTime;
+                UpdateEventUI();
+            }
 
             if (countdownTimer <= 0f)
             {
@@ -105,8 +113,8 @@ namespace StackTower
                 warningImage.sprite = warningSprites[0];
 
             float elapsed = 0f;
-            float frameTimer = 0f;
-            int frameIndex = 0;
+            float frameTimer = 0f;  // ✅ tracks time between frames
+            int frameIndex = 0;   // ✅ current sprite frame
 
             while (elapsed < warningDuration)
             {
@@ -212,6 +220,13 @@ namespace StackTower
             // Game Over
             if (STGameManager.Instance != null)
                 STGameManager.Instance.AsteroidGameOver();
+        }
+
+        // ── Ability: freeze/unfreeze countdown ───────────────────
+        public void SetCountdownFrozen(bool frozen)
+        {
+            isCountdownFrozen = frozen;
+            Debug.Log("Countdown frozen: " + frozen);
         }
 
         // ── Update event UI ──────────────────────────────────────
