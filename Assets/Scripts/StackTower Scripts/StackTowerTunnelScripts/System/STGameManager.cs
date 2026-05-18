@@ -9,11 +9,8 @@ namespace StackTower
         public static STGameManager Instance;
 
         [Header("XP Settings")]
-        public int perfectXP = 10;  // ✅ perfect land = +10
-        public int averageXP = 5;   // ✅ adjusted/slid land = +5
-
-        [Header("Input Lock")]
-        [HideInInspector] public bool isInputLocked = false;
+        public int perfectXP = 10;
+        public int averageXP = 5;
 
         [Header("Spawn Settings")]
         public float spawnDelay = 0.5f;
@@ -21,31 +18,23 @@ namespace StackTower
         [Header("Game Over Settings")]
         public bool canGameOver = true;
 
+        [Header("Input Lock")]
+        [HideInInspector] public bool isInputLocked = false;
+
         [Header("References")]
         public Transform blockSpawnPoint;
         public Transform deathZone;
-        public TextMeshProUGUI scoreText;        // shows XP
-        public TextMeshProUGUI blocksSpawnedText; // shows block count
+        public TextMeshProUGUI scoreText;
+        public TextMeshProUGUI blocksSpawnedText;
         public GameObject gameOverPanel;
 
-        [HideInInspector] public int score = 0; // total XP
-        [HideInInspector] public int blocksSpawned = 0; // total blocks spawned
+        [HideInInspector] public int score = 0;
+        [HideInInspector] public int blocksSpawned = 0;
+        [HideInInspector] public bool gameActive = true; // ✅ public for AsteroidEvent
 
-        private bool gameActive = true;
         private bool waitingToSpawn = false;
-        // Call these from your Settings Panel open/close
-        public void LockInput() => isInputLocked = true;
-        public void UnlockInput() => StartCoroutine(UnlockAfterDelay());
 
         void Awake() => Instance = this;
-
-        IEnumerator UnlockAfterDelay()
-        {
-            // ✅ Wait one frame so the closing tap doesn't drop the block
-            yield return new WaitForEndOfFrame();
-            yield return new WaitForEndOfFrame(); // two frames to be safe
-            isInputLocked = false;
-        }
 
         void Start()
         {
@@ -106,30 +95,29 @@ namespace StackTower
                 return;
             }
 
-            // ✅ Count every block spawned
             blocksSpawned++;
             UpdateUI();
-
             bc.Initialize(blockSpawnPoint, deathZone);
         }
 
         // ─── Normal block landed ─────────────────────────────────
-        // Called by TowerManager after connection check
         public void BlockStacked(bool isPerfect)
         {
-            // ✅ Perfect = +10, Adjusted = +5
-            score += isPerfect ? perfectXP : averageXP;
+            int points = isPerfect ? perfectXP : averageXP;
+            score += points;
             UpdateUI();
-            Debug.Log("XP awarded: " + (isPerfect ? perfectXP : averageXP) +
-                      " | isPerfect: " + isPerfect);
+
+            // ✅ Notify asteroid event
+            if (AsteroidEvent.Instance != null)
+                AsteroidEvent.Instance.OnBlockPlaced();
+
+            Debug.Log("XP: +" + points + " isPerfect: " + isPerfect);
         }
 
         // ─── Normal block fell into void ─────────────────────────
-        // No lives system — just return block to pool
         public void BlockMissed(GameObject block)
         {
             ObjectPool.Instance.ReturnBlock(block);
-            // ✅ No lives deduction — just continue
         }
 
         // ─── Trap landed on tower ────────────────────────────────
@@ -159,15 +147,39 @@ namespace StackTower
             GameOver();
         }
 
+        // ─── Asteroid hit ────────────────────────────────────────
+        public void AsteroidGameOver()
+        {
+            if (!gameActive) return;
+
+            gameActive = false;
+            Time.timeScale = 0f;
+
+            if (gameOverPanel != null)
+                gameOverPanel.SetActive(true);
+
+            Debug.Log("Asteroid Game Over!");
+        }
+
+        // ─── Unlock input with delay ─────────────────────────────
+        public void LockInput() => isInputLocked = true;
+
+        public void UnlockInput() => StartCoroutine(UnlockAfterDelay());
+
+        IEnumerator UnlockAfterDelay()
+        {
+            yield return new WaitForEndOfFrame();
+            yield return new WaitForEndOfFrame();
+            isInputLocked = false;
+        }
+
         void UpdateUI()
         {
-            // ✅ XP display
             if (scoreText != null)
                 scoreText.text = score.ToString();
             else
                 Debug.LogWarning("STGameManager: scoreText not assigned!");
 
-            // ✅ Block count display
             if (blocksSpawnedText != null)
                 blocksSpawnedText.text = blocksSpawned.ToString();
             else
@@ -179,15 +191,12 @@ namespace StackTower
             if (!canGameOver) return;
 
             gameActive = false;
-
-            // ✅ ADD THIS LINE
-            PlayerXPManager.SaveScore(score);
-
             Time.timeScale = 0f;
 
             if (gameOverPanel != null)
                 gameOverPanel.SetActive(true);
         }
+
         public void RestartGame()
         {
             Time.timeScale = 1f;
