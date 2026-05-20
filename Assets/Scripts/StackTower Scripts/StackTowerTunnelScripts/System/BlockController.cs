@@ -78,13 +78,21 @@ namespace StackTower
 
         void Release()
         {
-            // ✅ Block input if locked (settings panel just closed)
+            // Block if input is locked (settings panel, ability button)
             if (STGameManager.Instance != null && STGameManager.Instance.isInputLocked)
                 return;
 
-            // Block if tap is over UI element
+            // Block if tap is over any UI element (mouse)
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
                 return;
+
+            // ✅ Block if tap is over any UI element (touch/mobile)
+            if (Input.touchCount > 0)
+            {
+                if (EventSystem.current != null &&
+                    EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId))
+                    return;
+            }
 
             isRiding = false;
             rb.gravityScale = fallGravityScale;

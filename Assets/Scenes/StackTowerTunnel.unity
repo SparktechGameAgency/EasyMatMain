@@ -1000,7 +1000,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -431, y: 48}
+  m_AnchoredPosition: {x: 459, y: 144}
   m_SizeDelta: {x: 120, y: 120}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &126116899
@@ -1284,10 +1284,12 @@ MonoBehaviour:
   alienClimber: {fileID: 1846421236}
   alienStartPoint: {fileID: 704844719}
   blocksToActivateAlien: 2
+  baseBlockClimbPoint: {fileID: 1156703869}
   minOverlapToConnect: 0.05
   perfectThreshold: 0.05
   speedIncreasePerBlock: 0.1
   maxSpeed: 8
+  alignAbilityButton: {fileID: 589214744}
 --- !u!4 &177457233
 Transform:
   m_ObjectHideFlags: 0
@@ -1578,7 +1580,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 435, y: -64}
+  m_AnchoredPosition: {x: -435, y: -64}
   m_SizeDelta: {x: 200, y: 150}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &271081575
@@ -2036,8 +2038,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 28.939941}
+  m_SizeDelta: {x: 90, y: -57.88}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &445561107
 MonoBehaviour:
@@ -2442,6 +2444,7 @@ GameObject:
   - component: {fileID: 523032118}
   - component: {fileID: 523032117}
   - component: {fileID: 523032119}
+  - component: {fileID: 523032120}
   m_Layer: 0
   m_Name: Base Block
   m_TagString: BaseBlock
@@ -2490,7 +2493,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_Sprite: {fileID: 21300000, guid: d093791e296917b4daceacc04c52e378, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 5cbcd50b44646174a8b0538f26ff9eaf, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -2515,6 +2518,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 704844719}
+  - {fileID: 1156703869}
   m_Father: {fileID: 745713097}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!61 &523032119
@@ -2553,7 +2557,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 13.14, y: 7.29}
+    oldSize: {x: 13.14, y: 8.01}
     newSize: {x: 13.14, y: 7.29}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -2562,6 +2566,24 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 13.14, y: 7.29}
   m_EdgeRadius: 0
+--- !u!114 &523032120
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 523032116}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e0269767d1e75e458997262e14c4827, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tunnelData:
+    entryPoint: 0
+    exitPoint: 0
+    waypoints: []
+  isTrapBlock: 0
+  fallSpeed: 8
 --- !u!1 &589214739
 GameObject:
   m_ObjectHideFlags: 0
@@ -2574,6 +2596,7 @@ GameObject:
   - component: {fileID: 589214743}
   - component: {fileID: 589214742}
   - component: {fileID: 589214741}
+  - component: {fileID: 589214744}
   m_Layer: 5
   m_Name: Auto Align (BTN)
   m_TagString: Untagged
@@ -2598,7 +2621,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -431, y: -98}
+  m_AnchoredPosition: {x: 459, y: -2}
   m_SizeDelta: {x: 120, y: 120}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &589214741
@@ -2644,7 +2667,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 589214742}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 589214744}
+        m_TargetAssemblyTypeName: StackTower.AlignAbilityButton, Assembly-CSharp
+        m_MethodName: OnAbilityPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &589214742
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2683,6 +2718,21 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 589214739}
   m_CullTransparentMesh: 1
+--- !u!114 &589214744
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 589214739}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee041db70efb5d141b461ca7e7256e17, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxUses: 5
+  usesText: {fileID: 1133202772}
+  button: {fileID: 589214741}
 --- !u!1 &704844718
 GameObject:
   m_ObjectHideFlags: 0
@@ -2708,7 +2758,7 @@ Transform:
   m_GameObject: {fileID: 704844718}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.44, z: -0.5}
+  m_LocalPosition: {x: 0, y: -0.19, z: -0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3429,6 +3479,83 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1133202770}
   m_CullTransparentMesh: 1
+--- !u!1 &1156703868
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1156703869}
+  - component: {fileID: 1156703870}
+  m_Layer: 0
+  m_Name: Matchpos
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1156703869
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156703868}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 2.63, z: 0}
+  m_LocalScale: {x: 4.8271875, y: 1.8625, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 523032118}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!61 &1156703870
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156703868}
+  m_Enabled: 1
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_UsedByComposite: 0
+  m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0, y: 0}
+    oldSize: {x: 0, y: 0}
+    newSize: {x: 0, y: 0}
+    adaptiveTilingThreshold: 0
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  serializedVersion: 2
+  m_Size: {x: 1, y: 1}
+  m_EdgeRadius: 0
 --- !u!1 &1163714330
 GameObject:
   m_ObjectHideFlags: 0
@@ -4048,7 +4175,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.8771987}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 3}
   m_SizeDelta: {x: 0, y: -1.519989}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &1374497384
@@ -4640,7 +4767,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -431, y: -247}
+  m_AnchoredPosition: {x: 459, y: -151}
   m_SizeDelta: {x: 120, y: 120}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1511607977
@@ -4781,11 +4908,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6ee22e9da0d679f46b90eb7db08cae6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  minInterval: 10
-  maxInterval: 10
+  minInterval: 60
+  maxInterval: 120
   minBlocksRequired: 1
   maxBlocksRequired: 1
-  countdownDuration: 5
+  countdownDuration: 10
   warningImage: {fileID: 1589875421}
   warningSprites:
   - {fileID: 21300000, guid: 8c0697438228fe549833b279781bc5a0, type: 3}
@@ -4797,6 +4924,7 @@ MonoBehaviour:
   warningFadeSpeed: 2
   countdownText: {fileID: 2072412317}
   blockRequirementText: {fileID: 271081575}
+  abilityButtonGO: {fileID: 1511607975}
   asteroidImage: {fileID: 445561107}
   asteroidSprites:
   - {fileID: 21300000, guid: d78e9bf44ef002e4cb0b724cfd0f623b, type: 3}
@@ -5390,7 +5518,7 @@ Transform:
   m_GameObject: {fileID: 1846421233}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -5.6901984, y: -6.4485283, z: 31.5}
+  m_LocalPosition: {x: -5.6901984, y: -7.55, z: 31.5}
   m_LocalScale: {x: 0.29244006, y: 0.30901396, z: 0.6848714}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -5411,7 +5539,7 @@ MonoBehaviour:
   climbSpeed: 2.5
   reachThreshold: 0.1
   waitingIndex: 1
-  holdTimeOnFail: 1
+  holdTimeOnFail: 2
   deathSprites:
   - {fileID: 21300000, guid: a9b74e0a32e05664d8dcaf1137bdca08, type: 3}
   - {fileID: 21300000, guid: ceb714a568abdb248857fa9dc7de8df2, type: 3}
@@ -5890,6 +6018,8 @@ RectTransform:
   - {fileID: 126116898}
   - {fileID: 589214740}
   - {fileID: 1511607976}
+  - {fileID: 2072412316}
+  - {fileID: 271081574}
   - {fileID: 1589875420}
   - {fileID: 445561106}
   - {fileID: 40241177}
@@ -5899,8 +6029,6 @@ RectTransform:
   - {fileID: 1711090536}
   - {fileID: 1946452819}
   - {fileID: 359819200}
-  - {fileID: 2072412316}
-  - {fileID: 271081574}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -6116,7 +6244,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 435, y: 110}
+  m_AnchoredPosition: {x: -435, y: 110}
   m_SizeDelta: {x: 200, y: 150}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2072412317
@@ -6314,7 +6442,6 @@ MonoBehaviour:
   averageXP: 5
   spawnDelay: 2
   canGameOver: 1
-  isInputLocked: 0
   blockSpawnPoint: {fileID: 157284020}
   deathZone: {fileID: 1823324165}
   scoreText: {fileID: 490200778}

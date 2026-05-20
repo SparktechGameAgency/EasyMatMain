@@ -53,7 +53,7 @@ namespace StackTower
         void Awake()
         {
             Instance = this;
-            gameObject.SetActive(false);
+            // ✅ Alien stays visible from start — removed SetActive(false)
 
             if (spriteRenderer == null)
                 spriteRenderer = GetComponent<SpriteRenderer>();
@@ -88,7 +88,7 @@ namespace StackTower
 
         public void Activate(Transform startPoint)
         {
-            gameObject.SetActive(true);
+            // ✅ Alien already visible — no SetActive needed
             transform.position = startPoint.position;
             isClimbing = true;
 
@@ -246,6 +246,15 @@ namespace StackTower
             {
                 currentTarget = null;
             }
+        }
+
+        // ── Called by TowerManager when align ability cancels a bad land ───
+        public void CancelConnectionFailed()
+        {
+            connectionFailed = false;
+            climbQueue.Clear();   // discard the "die path" points OnConnectionFailed queued
+            StopAllCoroutines();  // stop HoldThenDie if it already started
+            Debug.Log("AlienClimber: connection failure cancelled by align ability.");
         }
 
         public void Stop()

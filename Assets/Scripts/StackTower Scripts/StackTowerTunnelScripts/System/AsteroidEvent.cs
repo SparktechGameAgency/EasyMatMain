@@ -29,6 +29,9 @@ namespace StackTower
         public TextMeshProUGUI countdownText;        // countdown timer TMP
         public TextMeshProUGUI blockRequirementText; // ✅ blocks needed TMP
 
+        [Header("Ability Button")]
+        public GameObject abilityButtonGO; // ✅ drag ability button GO here — hidden outside event
+
         [Header("Asteroid Animation")]
         public Image asteroidImage;
         public Sprite[] asteroidSprites;
@@ -62,6 +65,7 @@ namespace StackTower
 
             if (countdownText != null) countdownText.gameObject.SetActive(false);
             if (blockRequirementText != null) blockRequirementText.gameObject.SetActive(false);
+            if (abilityButtonGO != null) abilityButtonGO.SetActive(false); // ✅ hidden at start
         }
 
         void Update()
@@ -155,6 +159,7 @@ namespace StackTower
 
             if (countdownText != null) countdownText.gameObject.SetActive(true);
             if (blockRequirementText != null) blockRequirementText.gameObject.SetActive(true);
+            if (abilityButtonGO != null) abilityButtonGO.SetActive(true); // ✅ show button
 
             UpdateEventUI();
 
@@ -182,6 +187,7 @@ namespace StackTower
 
             if (countdownText != null) countdownText.gameObject.SetActive(false);
             if (blockRequirementText != null) blockRequirementText.gameObject.SetActive(false);
+            if (abilityButtonGO != null) abilityButtonGO.SetActive(false); // ✅ hide on success
 
             StartCoroutine(WaitThenWarn());
         }
@@ -194,10 +200,11 @@ namespace StackTower
             // Hide event UI
             if (countdownText != null) countdownText.gameObject.SetActive(false);
             if (blockRequirementText != null) blockRequirementText.gameObject.SetActive(false);
+            if (abilityButtonGO != null) abilityButtonGO.SetActive(false); // ✅ hide on impact
 
             // Lock all input
             if (STGameManager.Instance != null)
-                STGameManager.Instance.isInputLocked = true;
+                STGameManager.Instance.LockInputPermanent();
 
             // Show asteroid image
             if (asteroidImage != null)

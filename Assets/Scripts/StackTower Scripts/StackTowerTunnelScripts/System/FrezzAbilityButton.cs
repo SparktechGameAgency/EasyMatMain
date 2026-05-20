@@ -4,14 +4,14 @@ using TMPro;
 
 namespace StackTower
 {
-    public class AbilityButton : MonoBehaviour
+    public class FrezzAbilityButton : MonoBehaviour
     {
         [Header("Ability Settings")]
-        public int maxUses = 5;   // ✅ total uses available
-        public float freezeDuration = 3f;  // ✅ how long countdown freezes
+        public int maxUses = 5;
+        public float freezeDuration = 3f;
 
         [Header("References")]
-        public TextMeshProUGUI usesText; // ✅ TMP on button showing uses left
+        public TextMeshProUGUI usesText;
 
         private int usesLeft = 0;
         private bool isFreezing = false;
@@ -20,50 +20,36 @@ namespace StackTower
         {
             usesLeft = maxUses;
             UpdateUI();
+            gameObject.SetActive(false);
         }
 
-        // ── Called by Button OnClick ──────────────────────────────
         public void OnAbilityPressed()
         {
-            // Does nothing outside event
             if (AsteroidEvent.Instance == null || !AsteroidEvent.Instance.IsEventActive)
                 return;
 
-            // No uses left
-            if (usesLeft <= 0)
-            {
-                Debug.Log("No ability uses left!");
+            if (usesLeft <= 0 || isFreezing)
                 return;
-            }
 
-            // Already freezing
-            if (isFreezing)
-            {
-                Debug.Log("Ability already active!");
-                return;
-            }
+            // ✅ Frame-based lock: blocks same-frame GetMouseButtonDown in BlockController
+            if (STGameManager.Instance != null)
+                STGameManager.Instance.LockInputForFrames(2);
 
             usesLeft--;
             UpdateUI();
 
             StartCoroutine(FreezeCountdown());
-            Debug.Log("Ability used! Uses left: " + usesLeft);
         }
 
         IEnumerator FreezeCountdown()
         {
             isFreezing = true;
-
-            // ✅ Freeze the asteroid countdown
             AsteroidEvent.Instance.SetCountdownFrozen(true);
-            Debug.Log("Countdown frozen for " + freezeDuration + "s");
 
             yield return new WaitForSeconds(freezeDuration);
 
-            // ✅ Unfreeze countdown
             AsteroidEvent.Instance.SetCountdownFrozen(false);
             isFreezing = false;
-            Debug.Log("Countdown resumed!");
         }
 
         void UpdateUI()

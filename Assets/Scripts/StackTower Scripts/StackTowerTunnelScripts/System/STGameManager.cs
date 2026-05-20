@@ -19,7 +19,8 @@ namespace StackTower
         public bool canGameOver = true;
 
         [Header("Input Lock")]
-        [HideInInspector] public bool isInputLocked = false;
+        private int inputUnlockFrame = -1;
+        public bool isInputLocked => Time.frameCount < inputUnlockFrame;
 
         [Header("References")]
         public Transform blockSpawnPoint;
@@ -162,15 +163,15 @@ namespace StackTower
         }
 
         // ─── Unlock input with delay ─────────────────────────────
-        public void LockInput() => isInputLocked = true;
-
-        public void UnlockInput() => StartCoroutine(UnlockAfterDelay());
-
-        IEnumerator UnlockAfterDelay()
+        public void LockInputForFrames(int frames = 2)
         {
-            yield return new WaitForEndOfFrame();
-            yield return new WaitForEndOfFrame();
-            isInputLocked = false;
+            inputUnlockFrame = Time.frameCount + frames;
+        }
+
+        // Permanent lock (e.g. asteroid impact) — stays locked until scene reload
+        public void LockInputPermanent()
+        {
+            inputUnlockFrame = int.MaxValue;
         }
 
         void UpdateUI()
