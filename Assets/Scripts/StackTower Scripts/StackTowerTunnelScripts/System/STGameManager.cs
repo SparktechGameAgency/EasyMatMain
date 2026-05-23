@@ -111,17 +111,18 @@ namespace StackTower
                 return;
             }
 
-            // ✅ Activate alien if this is the first block landing
-            TowerManager.Instance.TryActivateAlien();
+            // ✅ Register trap in stack + activate alien if first block
+            TowerManager.Instance.TrapBlockLanded(block);
 
             if (LaserAbility.Instance != null && LaserAbility.Instance.HasUsesLeft)
             {
-                GameObject belowBlock = TowerManager.Instance.GetTopBlock();
+                // belowBlock is the block UNDER the trap (second from top)
+                GameObject belowBlock = TowerManager.Instance.GetSecondTopBlock();
                 LaserAbility.Instance.OnTrapLanding(block, belowBlock);
             }
             else
             {
-                // ✅ Don't return to pool — trap stays visible during death sequence
+                // No laser — trap stays visible, trigger death sequence
                 if (AlienClimber.Instance != null)
                     AlienClimber.Instance.TriggerTrapDeath();
                 else

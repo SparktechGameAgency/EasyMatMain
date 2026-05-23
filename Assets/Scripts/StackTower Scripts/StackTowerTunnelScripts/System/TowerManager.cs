@@ -360,12 +360,26 @@ namespace StackTower
         }
 
 
+        // ── Called when a trap block lands — registers it in the stack ─────────
+        public void TrapBlockLanded(GameObject trap)
+        {
+            trap.transform.SetParent(worldRoot, true);
+            stackedBlocks.Add(trap);
+            landedBlockCount++;
+
+            // Show bad landing message
+            if (LandingTextEffect.Instance != null)
+                LandingTextEffect.Instance.ShowBad(trap.transform.position);
+
+            // Activate alien if this is the first block
+            TryActivateAlien();
+        }
+
         // ── Activate alien on first block — safe to call multiple times ────────
         public void TryActivateAlien()
         {
-            if (landedBlockCount == 0)
+            if (landedBlockCount == 1)
             {
-                landedBlockCount++;
                 if (alienClimber != null && alienStartPoint != null)
                     alienClimber.Activate(alienStartPoint);
             }
@@ -377,6 +391,19 @@ namespace StackTower
             for (int i = stackedBlocks.Count - 1; i >= 0; i--)
                 if (stackedBlocks[i] != null) return stackedBlocks[i];
             return null;
+        }
+
+        // ── Returns the block below the topmost — used when trap is on top ───
+        public GameObject GetSecondTopBlock()
+        {
+            int found = 0;
+            for (int i = stackedBlocks.Count - 1; i >= 0; i--)
+            {
+                if (stackedBlocks[i] == null) continue;
+                found++;
+                if (found == 2) return stackedBlocks[i];
+            }
+            return null; // only one block — align to base block
         }
 
         // ── Laser ability: remove bad/trap block, spawn aligned replacement ──

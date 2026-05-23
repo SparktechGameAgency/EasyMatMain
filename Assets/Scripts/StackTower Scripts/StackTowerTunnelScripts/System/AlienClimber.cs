@@ -212,6 +212,18 @@ namespace StackTower
         // alien climbs to top → holds → plays animation → GameOver
         public void TriggerTrapDeath()
         {
+            connectionFailed = true;
+
+            // If alien has never climbed yet (trap was first block),
+            // there are no climb points — go straight to death
+            if (lastBlockClimbPoints == null)
+            {
+                if (isClimbing && currentTarget == null)
+                    StartCoroutine(HoldThenDie());
+                return;
+            }
+
+            // Otherwise reuse the normal connection fail path
             OnConnectionFailed();
         }
 
