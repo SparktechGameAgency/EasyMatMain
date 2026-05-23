@@ -33,9 +33,8 @@ namespace StackTower
 
             // ✅ Frame-based lock: blocks same-frame GetMouseButtonDown in BlockController
             if (STGameManager.Instance != null)
-                STGameManager.Instance.LockInputForFrames(2);
 
-            usesLeft--;
+                usesLeft--;
             UpdateUI();
 
             StartCoroutine(FreezeCountdown());

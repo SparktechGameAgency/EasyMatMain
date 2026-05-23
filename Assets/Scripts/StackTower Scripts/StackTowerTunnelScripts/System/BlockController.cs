@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using UnityEngine.EventSystems;
 
 namespace StackTower
 {
@@ -7,9 +6,13 @@ namespace StackTower
     {
         [Header("Trap Setting (tick ON for trap prefab only)")]
         [SerializeField] private bool isTrap = false;
+        public bool IsTrap => isTrap;
 
         [Header("Alien Climb Points (drag S1, S2, S3 etc.)")]
         public Transform[] climbPoints;
+
+        [Header("Mid Point (drag the mid child object here)")]
+        public Transform midPoint;
 
         [Header("Physics Settings")]
         [SerializeField] public float fallGravityScale = 3f;
@@ -19,6 +22,7 @@ namespace StackTower
         [SerializeField] private float settleTime = 0.25f;
         [Header("Spawn Settings")]
         public float spawnZ = 3.34f; // ✅ control Z from Inspector
+        public Vector3 spawnScale = new Vector3(0.7f, 0.7f, 1f);
 
         private bool isRiding = true;
         private bool hasLanded = false;
@@ -50,6 +54,7 @@ namespace StackTower
             rb.constraints = RigidbodyConstraints2D.FreezePositionX;
 
             transform.rotation = Quaternion.identity;
+            transform.localScale = spawnScale;
             transform.SetParent(null);
 
             Vector3 spawnPos = spawnPointRef.position;
@@ -61,11 +66,7 @@ namespace StackTower
             if (isRiding)
             {
                 Vector3 pos = spawnPoint.position;
-                transform.position = new Vector3(pos.x, pos.y, spawnZ); // ✅ not 0f anymore
-
-                if (Input.GetMouseButtonDown(0))
-                    Release();
-
+                transform.position = new Vector3(pos.x, pos.y, spawnZ);
                 return;
             }
 
@@ -76,24 +77,9 @@ namespace StackTower
                 ResolveVoid();
         }
 
-        void Release()
+        public void Release()
         {
-            // Block if input is locked (settings panel, ability button)
-            if (STGameManager.Instance != null && STGameManager.Instance.isInputLocked)
-                return;
-
-            // Block if tap is over any UI element (mouse)
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-                return;
-
-            // ✅ Block if tap is over any UI element (touch/mobile)
-            if (Input.touchCount > 0)
-            {
-                if (EventSystem.current != null &&
-                    EventSystem.current.IsPointerOverGameObject(Input.GetTouch(0).fingerId))
-                    return;
-            }
-
+            if (!isRiding) return;
             isRiding = false;
             rb.gravityScale = fallGravityScale;
             rb.constraints = RigidbodyConstraints2D.None;

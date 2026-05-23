@@ -19,23 +19,26 @@ namespace StackTower
         public bool canGameOver = true;
 
         [Header("Input Lock")]
-        private int inputUnlockFrame = -1;
-        public bool isInputLocked => Time.frameCount < inputUnlockFrame;
+        [HideInInspector] public bool isInputLocked = false;
 
         [Header("References")]
         public Transform blockSpawnPoint;
         public Transform deathZone;
-        public TextMeshProUGUI scoreText;
-        public TextMeshProUGUI blocksSpawnedText;
+        public TextMeshPro scoreTMPField; // drag ScoreObject here
         public GameObject gameOverPanel;
 
         [HideInInspector] public int score = 0;
-        [HideInInspector] public int blocksSpawned = 0;
-        [HideInInspector] public bool gameActive = true; // ✅ public for AsteroidEvent
+        [HideInInspector] public bool gameActive = true;
 
         private bool waitingToSpawn = false;
+        private BlockController currentRidingBlock = null;
+        private TextMeshPro scoreTMP;
 
-        void Awake() => Instance = this;
+        void Awake()
+        {
+            Instance = this;
+            scoreTMP = scoreTMPField;
+        }
 
         void Start()
         {
@@ -66,39 +69,18 @@ namespace StackTower
         {
             if (!gameActive) return;
 
-            if (blockSpawnPoint == null)
-            {
-                Debug.LogError("STGameManager: blockSpawnPoint not assigned!");
-                return;
-            }
-            if (deathZone == null)
-            {
-                Debug.LogError("STGameManager: deathZone not assigned!");
-                return;
-            }
-            if (ObjectPool.Instance == null)
-            {
-                Debug.LogError("STGameManager: ObjectPool is null!");
-                return;
-            }
+            if (blockSpawnPoint == null) { Debug.LogError("STGameManager: blockSpawnPoint not assigned!"); return; }
+            if (deathZone == null) { Debug.LogError("STGameManager: deathZone not assigned!"); return; }
+            if (ObjectPool.Instance == null) { Debug.LogError("STGameManager: ObjectPool is null!"); return; }
 
             GameObject block = ObjectPool.Instance.GetBlock();
-            if (block == null)
-            {
-                Debug.LogError("STGameManager: Pool returned null!");
-                return;
-            }
+            if (block == null) { Debug.LogError("STGameManager: Pool returned null!"); return; }
 
             BlockController bc = block.GetComponent<BlockController>();
-            if (bc == null)
-            {
-                Debug.LogError("Missing BlockController on prefab!");
-                return;
-            }
+            if (bc == null) { Debug.LogError("Missing BlockController on prefab!"); return; }
 
-            blocksSpawned++;
-            UpdateUI();
             bc.Initialize(blockSpawnPoint, deathZone);
+            currentRidingBlock = bc;
         }
 
         // ─── Normal block landed ─────────────────────────────────
@@ -108,7 +90,6 @@ namespace StackTower
             score += points;
             UpdateUI();
 
-            // ✅ Notify asteroid event
             if (AsteroidEvent.Instance != null)
                 AsteroidEvent.Instance.OnBlockPlaced();
 
@@ -124,14 +105,27 @@ namespace StackTower
         // ─── Trap landed on tower ────────────────────────────────
         public void TrapLandedOnTower(GameObject block)
         {
-            if (canGameOver)
+            if (!canGameOver)
             {
                 ObjectPool.Instance.ReturnBlock(block);
-                GameOver();
+                return;
+            }
+
+            // ✅ Activate alien if this is the first block landing
+            TowerManager.Instance.TryActivateAlien();
+
+            if (LaserAbility.Instance != null && LaserAbility.Instance.HasUsesLeft)
+            {
+                GameObject belowBlock = TowerManager.Instance.GetTopBlock();
+                LaserAbility.Instance.OnTrapLanding(block, belowBlock);
             }
             else
             {
-                ObjectPool.Instance.ReturnBlock(block);
+                // ✅ Don't return to pool — trap stays visible during death sequence
+                if (AlienClimber.Instance != null)
+                    AlienClimber.Instance.TriggerTrapDeath();
+                else
+                    GameOver();
             }
         }
 
@@ -152,50 +146,40 @@ namespace StackTower
         public void AsteroidGameOver()
         {
             if (!gameActive) return;
-
             gameActive = false;
             Time.timeScale = 0f;
-
-            if (gameOverPanel != null)
-                gameOverPanel.SetActive(true);
-
+            if (gameOverPanel != null) gameOverPanel.SetActive(true);
             Debug.Log("Asteroid Game Over!");
         }
 
-        // ─── Unlock input with delay ─────────────────────────────
-        public void LockInputForFrames(int frames = 2)
-        {
-            inputUnlockFrame = Time.frameCount + frames;
-        }
+        // ─── Input lock ──────────────────────────────────────────
+        public void LockInputPermanent() => isInputLocked = true;
+        public void LockInput() => isInputLocked = true;
+        public void UnlockInput() => isInputLocked = false;
 
-        // Permanent lock (e.g. asteroid impact) — stays locked until scene reload
-        public void LockInputPermanent()
+        // ─── Drop block ──────────────────────────────────────────
+        public void TryDropBlock()
         {
-            inputUnlockFrame = int.MaxValue;
+            if (!gameActive || isInputLocked) return;
+            if (currentRidingBlock == null) return;
+            currentRidingBlock.Release();
+            currentRidingBlock = null;
         }
 
         void UpdateUI()
         {
-            if (scoreText != null)
-                scoreText.text = score.ToString();
+            if (scoreTMP != null)
+                scoreTMP.text = score.ToString();
             else
-                Debug.LogWarning("STGameManager: scoreText not assigned!");
-
-            if (blocksSpawnedText != null)
-                blocksSpawnedText.text = blocksSpawned.ToString();
-            else
-                Debug.LogWarning("STGameManager: blocksSpawnedText not assigned!");
+                Debug.LogWarning("STGameManager: scoreTMP is null — check ScoreObject child!");
         }
 
         void GameOver()
         {
             if (!canGameOver) return;
-
             gameActive = false;
             Time.timeScale = 0f;
-
-            if (gameOverPanel != null)
-                gameOverPanel.SetActive(true);
+            if (gameOverPanel != null) gameOverPanel.SetActive(true);
         }
 
         public void RestartGame()

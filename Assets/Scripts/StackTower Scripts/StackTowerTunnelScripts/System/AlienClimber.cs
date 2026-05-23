@@ -207,6 +207,14 @@ namespace StackTower
             }
         }
 
+        // ✅ Called by STGameManager when trap block lands
+        // Reuses EXACT same flow as connection fail:
+        // alien climbs to top → holds → plays animation → GameOver
+        public void TriggerTrapDeath()
+        {
+            OnConnectionFailed();
+        }
+
         IEnumerator HoldThenDie()
         {
             Debug.Log("Alien holding for " + holdTimeOnFail + " seconds...");
@@ -248,13 +256,22 @@ namespace StackTower
             }
         }
 
-        // ── Called by TowerManager when align ability cancels a bad land ───
-        public void CancelConnectionFailed()
+        // ── Called by TowerManager / LaserAbility — cancels fail sequence ──
+        public void CancelConnectionFailed() => CancelConnectionFail(); // alias
+
+        public void CancelConnectionFail()
         {
+            if (!connectionFailed) return;
+
             connectionFailed = false;
-            climbQueue.Clear();   // discard the "die path" points OnConnectionFailed queued
-            StopAllCoroutines();  // stop HoldThenDie if it already started
-            Debug.Log("AlienClimber: connection failure cancelled by align ability.");
+            StopAllCoroutines();  // stop HoldThenDie if already started
+            climbQueue.Clear();   // remove the die-path points added by OnConnectionFailed
+
+            Debug.Log("Alien connection fail cancelled — laser used!");
+
+            // Resume normal climbing if there are points waiting
+            if (isClimbing && currentTarget == null)
+                TryDequeueNext();
         }
 
         public void Stop()

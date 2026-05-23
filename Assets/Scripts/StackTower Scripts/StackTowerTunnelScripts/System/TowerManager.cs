@@ -81,8 +81,8 @@ namespace StackTower
             stackedBlocks.Add(block);
             landedBlockCount++;
 
-            // Activate alien after X blocks
-            if (landedBlockCount == blocksToActivateAlien)
+            // Activate alien when first block lands
+            if (landedBlockCount == 1)
             {
                 if (alienClimber != null && alienStartPoint != null)
                     alienClimber.Activate(alienStartPoint);
@@ -164,6 +164,10 @@ namespace StackTower
                             // No overlap with base block
                             if (LandingTextEffect.Instance != null)
                                 LandingTextEffect.Instance.ShowBad(block.transform.position);
+
+                            // ✅ Notify laser ability — base block case (null = use baseBlockClimbPoint)
+                            if (LaserAbility.Instance != null)
+                                LaserAbility.Instance.OnBadLanding(block, null);
 
                             RegisterPendingAlign(block);
 
@@ -269,6 +273,10 @@ namespace StackTower
                 if (LandingTextEffect.Instance != null)
                     LandingTextEffect.Instance.ShowBad(block.transform.position);
 
+                // ✅ Notify laser ability — pass bad block + block below
+                if (LaserAbility.Instance != null)
+                    LaserAbility.Instance.OnBadLanding(block, belowBlock);
+
                 RegisterPendingAlign(block);
 
                 if (alienClimber != null)
@@ -348,11 +356,127 @@ namespace StackTower
                 alienClimber.AddClimbPointsFromBlock(newBC);
             }
 
-            // Flash Perfect text as visual feedback
-            if (LandingTextEffect.Instance != null)
-                LandingTextEffect.Instance.ShowPerfect(block.transform.position);
-
             Debug.Log("Align ability used! xDiff: " + xDiff.ToString("F3"));
+        }
+
+
+        // ── Activate alien on first block — safe to call multiple times ────────
+        public void TryActivateAlien()
+        {
+            if (landedBlockCount == 0)
+            {
+                landedBlockCount++;
+                if (alienClimber != null && alienStartPoint != null)
+                    alienClimber.Activate(alienStartPoint);
+            }
+        }
+
+        // ── Returns the topmost landed block ─────────────────────────────────
+        public GameObject GetTopBlock()
+        {
+            for (int i = stackedBlocks.Count - 1; i >= 0; i--)
+                if (stackedBlocks[i] != null) return stackedBlocks[i];
+            return null;
+        }
+
+        // ── Laser ability: remove bad/trap block, spawn aligned replacement ──
+        public void ReplaceWithAlignedBlock(GameObject oldBlock, GameObject belowBlock, bool isTrap)
+        {
+            // ── Get aligned X ────────────────────────────────────────
+            float targetX;
+            if (belowBlock != null)
+            {
+                BlockController belowBC = belowBlock.GetComponent<BlockController>();
+                Transform belowHighest = belowBC?.GetHighestClimbPoint();
+                if (belowHighest == null)
+                {
+                    Debug.LogWarning("TowerManager: ReplaceWithAlignedBlock — no belowHighest!");
+                    return;
+                }
+                targetX = belowHighest.position.x;
+            }
+            else
+            {
+                if (baseBlockClimbPoint == null)
+                {
+                    Debug.LogWarning("TowerManager: ReplaceWithAlignedBlock — no baseBlockClimbPoint!");
+                    return;
+                }
+                targetX = baseBlockClimbPoint.position.x;
+            }
+
+            // ── Remember Y from old block ─────────────────────────
+            float blockY = oldBlock != null ? oldBlock.transform.position.y : 0f;
+            float blockZ = oldBlock != null ? oldBlock.transform.position.z : 0f;
+
+            // ── Remove old block ──────────────────────────────────
+            if (oldBlock != null)
+            {
+                stackedBlocks.Remove(oldBlock);
+                oldBlock.transform.SetParent(null);
+                oldBlock.tag = "Untagged";
+                ObjectPool.Instance.ReturnBlock(oldBlock);
+            }
+
+            // ── Spawn new aligned block ───────────────────────────
+            GameObject newBlock = ObjectPool.Instance.GetNonTrapBlock(); // ✅ never spawns a trap
+            if (newBlock == null)
+            {
+                Debug.LogError("TowerManager: Pool returned null for replacement block!");
+                return;
+            }
+
+            BlockController newBC = newBlock.GetComponent<BlockController>();
+            if (newBC == null)
+            {
+                Debug.LogError("TowerManager: Replacement block missing BlockController!");
+                return;
+            }
+
+            // ── Position: align lowest climb point to targetX ───
+            newBlock.transform.position = new Vector3(targetX, blockY, blockZ);
+            newBlock.transform.rotation = Quaternion.identity;
+            newBlock.transform.localScale = newBC.spawnScale; // ✅ always (0.7, 0.7, 1)
+
+            // Offset root X so the lowest climb point sits exactly on targetX
+            Transform newLowest = newBC.GetLowestClimbPoint();
+            if (newLowest != null)
+            {
+                float climbOffsetX = newLowest.position.x - newBlock.transform.position.x;
+                newBlock.transform.position = new Vector3(targetX - climbOffsetX, blockY, blockZ);
+            }
+
+            // Freeze it as a settled block
+            Rigidbody2D rb = newBlock.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.gravityScale = 0f;
+                rb.velocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+                rb.isKinematic = true;
+                rb.constraints = RigidbodyConstraints2D.FreezeAll;
+            }
+
+            newBlock.tag = "Block";
+            newBlock.transform.SetParent(worldRoot, true);
+            stackedBlocks.Add(newBlock);
+            landedBlockCount++;
+
+            // ── Activate alien on first block if not yet active ───
+            if (landedBlockCount == 1)
+            {
+                if (alienClimber != null && alienStartPoint != null)
+                    alienClimber.Activate(alienStartPoint);
+            }
+
+            // ── Cancel alien death + give climb points ────────────
+            if (alienClimber != null)
+            {
+                alienClimber.CancelConnectionFailed();
+                alienClimber.AddClimbPointsFromBlock(newBC);
+            }
+
+            Debug.Log("Laser replaced block at X: " + targetX.ToString("F3"));
         }
 
         void RecycleOffScreenBlocks()
