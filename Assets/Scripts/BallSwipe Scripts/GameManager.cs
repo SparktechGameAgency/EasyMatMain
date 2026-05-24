@@ -181,7 +181,8 @@ public class GameManager : MonoBehaviour
     private void GameOver()
     {
         Debug.Log("🎮 GameOver Score = " + score); // ← ADD THIS
-        PlayerXPManager.SaveScore(score); // ✅ ADD THIS LINE
+        //PlayerXPManager.SaveScore(score); // ✅ ADD THIS LINE
+        PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Snake);
 
         if (gameOverPanel) gameOverPanel.SetActive(true);
         if (scoreText) scoreText.gameObject.SetActive(false);

@@ -313,7 +313,9 @@ public class ChixGameManager : MonoBehaviour
         if (gameOverPanel == null) return;
         if (gameOverPanel.activeSelf) return;
 
-        PlayerXPManager.SaveScore(score); // ? ADD THIS LINE
+        //PlayerXPManager.SaveScore(score); // ? ADD THIS LINE
+        PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Chix);
+
 
         if (finalScoreText != null)
             finalScoreText.text = "Final Score: " + score.ToString();

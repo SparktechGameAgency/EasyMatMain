@@ -148,6 +148,10 @@ namespace StackTower
         {
             if (!gameActive) return;
             gameActive = false;
+
+            // ✅ ADD THIS LINE
+            PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Block);
+
             Time.timeScale = 0f;
             if (gameOverPanel != null) gameOverPanel.SetActive(true);
             Debug.Log("Asteroid Game Over!");
@@ -175,10 +179,27 @@ namespace StackTower
                 Debug.LogWarning("STGameManager: scoreTMP is null — check ScoreObject child!");
         }
 
+        /*void GameOver()
+        {
+            if (!canGameOver) return;
+            gameActive = false;
+
+            GameOverWindow gow = gameOverPanel != null
+                ? gameOverPanel.GetComponentInChildren<GameOverWindow>(true)
+                : null;
+
+            if (gow != null)
+                gow.ShowGameOver();
+            else if (gameOverPanel != null)
+                gameOverPanel.SetActive(true);
+        }*/
         void GameOver()
         {
             if (!canGameOver) return;
             gameActive = false;
+
+            // ✅ ADD THIS LINE
+            PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Block);
 
             GameOverWindow gow = gameOverPanel != null
                 ? gameOverPanel.GetComponentInChildren<GameOverWindow>(true)

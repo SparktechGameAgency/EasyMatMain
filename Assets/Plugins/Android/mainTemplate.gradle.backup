@@ -1,20 +1,16 @@
 apply plugin: 'com.android.library'
-
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.google.firebase:firebase-auth:22.3.1'
     implementation 'com.google.android.gms:play-services-auth:21.0.0'
 **DEPS**}
-
 android {
     compileSdkVersion **APIVERSION**
     buildToolsVersion '**BUILDTOOLS**'
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
-
     defaultConfig {
         minSdkVersion **MINSDKVERSION**
         targetSdkVersion **TARGETSDKVERSION**
@@ -24,8 +20,13 @@ android {
         versionCode **VERSIONCODE**
         versionName '**VERSIONNAME**'
     }
-
     lintOptions {
         abortOnError false
+    }
+    configurations.all {
+        resolutionStrategy {
+            force 'com.google.code.gson:gson:2.10.1'
+            force 'com.squareup.okio:okio:3.4.0'
+        }
     }
 }

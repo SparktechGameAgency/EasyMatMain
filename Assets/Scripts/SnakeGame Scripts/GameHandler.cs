@@ -208,7 +208,8 @@ public class GameHandler : MonoBehaviour
     // ✅ Add this new method to GameHandler
     public void TriggerGameOver()
     {
-        PlayerXPManager.SaveScore(score); // ✅ ADD THIS LINE
+       // PlayerXPManager.SaveScore(score); // ✅ ADD THIS LINE
+        PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Ball);
         Debug.Log("✅ Snake score saved: " + score);
     }
 }
