@@ -121,7 +121,6 @@ namespace StackTower
         public void OnConnectionFailed()
         {
             connectionFailed = true;
-            Debug.Log("Connection failed! Alien climbing to top then game over.");
 
             if (lastBlockClimbPoints != null)
             {
@@ -131,6 +130,14 @@ namespace StackTower
                     if (point != null)
                         climbQueue.Enqueue(point);
                 }
+            }
+
+            // No climb points yet (first block) — go straight to death
+            if (climbQueue.Count == 0)
+            {
+                if (isClimbing)
+                    StartCoroutine(HoldThenDie());
+                return;
             }
 
             if (isClimbing && currentTarget == null)

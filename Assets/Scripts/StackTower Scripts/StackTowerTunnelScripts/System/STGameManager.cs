@@ -179,8 +179,15 @@ namespace StackTower
         {
             if (!canGameOver) return;
             gameActive = false;
-            Time.timeScale = 0f;
-            if (gameOverPanel != null) gameOverPanel.SetActive(true);
+
+            GameOverWindow gow = gameOverPanel != null
+                ? gameOverPanel.GetComponentInChildren<GameOverWindow>(true)
+                : null;
+
+            if (gow != null)
+                gow.ShowGameOver();
+            else if (gameOverPanel != null)
+                gameOverPanel.SetActive(true);
         }
 
         public void RestartGame()

@@ -68,14 +68,16 @@ public class GameOverWindow : MonoBehaviour
             finalScoreText.text = "Score: " + GameHandler.GetScore().ToString();
 
         if (stScoreText != null)
-            stScoreText.text = StackTower.STGameManager.Instance.score.ToString();
+            stScoreText.text = "Score: " + StackTower.STGameManager.Instance.score.ToString();
 
         if (gameOverPanel != null)
         {
+            Vector3 originalScale = new Vector3(0.6829165f, 0.6829165f, 0.6829165f);
+
             gameOverPanel.SetActive(true);
             gameOverPanel.transform.localScale = Vector3.zero;
             gameOverPanel.transform
-                .DOScale(Vector3.one, 0.4f)
+                .DOScale(originalScale, 0.4f)
                 .SetDelay(1f)
                 .SetEase(Ease.OutBack)
                 .SetUpdate(true)

@@ -24,6 +24,9 @@ namespace StackTower
         public float spawnZ = 3.34f; // ✅ control Z from Inspector
         public Vector3 spawnScale = new Vector3(0.7f, 0.7f, 1f);
 
+        [Header("Death Effect")]
+        public ParticleSystem deathParticle;
+
         private bool isRiding = true;
         private bool hasLanded = false;
         private bool hasResolved = false;
@@ -141,6 +144,13 @@ namespace StackTower
         {
             if (hasResolved) return;
             hasResolved = true;
+
+            if (deathParticle != null)
+            {
+                ParticleSystem ps = Instantiate(deathParticle, transform.position, Quaternion.identity);
+                ps.Play();
+                Destroy(ps.gameObject, ps.main.duration + ps.main.startLifetime.constantMax);
+            }
 
             if (isTrap)
                 STGameManager.Instance.TrapDodged(gameObject);

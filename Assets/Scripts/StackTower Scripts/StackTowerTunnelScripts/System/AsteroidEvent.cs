@@ -224,7 +224,21 @@ namespace StackTower
                 }
             }
 
-            // Game Over
+            // Hide blocks, alien and base block then pause + game over
+            if (TowerManager.Instance != null)
+            {
+                if (TowerManager.Instance.worldRoot != null)
+                    TowerManager.Instance.worldRoot.gameObject.SetActive(false);
+
+                if (TowerManager.Instance.alienClimber != null)
+                    TowerManager.Instance.alienClimber.gameObject.SetActive(false);
+
+                if (TowerManager.Instance.baseBlockClimbPoint != null)
+                    TowerManager.Instance.baseBlockClimbPoint.transform.root.gameObject.SetActive(false);
+            }
+
+            Time.timeScale = 0f;
+
             if (STGameManager.Instance != null)
                 STGameManager.Instance.AsteroidGameOver();
         }

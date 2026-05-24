@@ -18,6 +18,7 @@ TagManager:
   - Egg
   - front
   - BaseBlock
+  - Tower
   layers:
   - Default
   - TransparentFX
