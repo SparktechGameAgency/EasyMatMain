@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Collections;
 using DG.Tweening;
+using TMPro;
 
 public class GameOverWindow : MonoBehaviour
 {
@@ -13,6 +14,8 @@ public class GameOverWindow : MonoBehaviour
     [SerializeField] private Text finalScoreText;
     //[SerializeField] private Button exitButton;
     [SerializeField] private Button returnHomeButton;
+
+    [SerializeField] private TextMeshProUGUI stScoreText; // ST game score (TMP UI)
 
     [SerializeField] private string returnSceneName = "MainMenu";
 
@@ -64,6 +67,9 @@ public class GameOverWindow : MonoBehaviour
         if (finalScoreText != null)
             finalScoreText.text = "Score: " + GameHandler.GetScore().ToString();
 
+        if (stScoreText != null)
+            stScoreText.text = StackTower.STGameManager.Instance.score.ToString();
+
         if (gameOverPanel != null)
         {
             gameOverPanel.SetActive(true);
@@ -110,4 +116,3 @@ public class GameOverWindow : MonoBehaviour
 
 
 }
-
