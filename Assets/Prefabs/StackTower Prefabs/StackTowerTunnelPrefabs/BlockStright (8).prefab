@@ -181,8 +181,8 @@ MonoBehaviour:
   - {fileID: 6782659884651034380}
   - {fileID: 6448536507536524093}
   midPoint: {fileID: 921374327523668812}
-  fallGravityScale: 5
-  maxFallSpeed: 25
+  fallGravityScale: 8
+  maxFallSpeed: 30
   settleVelocity: 0.15
   settleAngular: 10
   settleTime: 0.25

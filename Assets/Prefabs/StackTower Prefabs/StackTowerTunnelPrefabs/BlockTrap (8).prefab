@@ -206,8 +206,8 @@ MonoBehaviour:
   isTrap: 1
   climbPoints: []
   midPoint: {fileID: 4327122755922175267}
-  fallGravityScale: 5
-  maxFallSpeed: 25
+  fallGravityScale: 8
+  maxFallSpeed: 30
   settleVelocity: 0.15
   settleAngular: 10
   settleTime: 0.25
