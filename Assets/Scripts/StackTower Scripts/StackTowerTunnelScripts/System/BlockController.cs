@@ -68,6 +68,8 @@ namespace StackTower
         {
             if (isRiding)
             {
+                if (spawnPoint == null) return; // not initialized yet, skip this frame
+
                 Vector3 pos = spawnPoint.position;
                 transform.position = new Vector3(pos.x, pos.y, spawnZ);
                 return;
@@ -79,7 +81,6 @@ namespace StackTower
             if (!hasResolved && deathZone != null && transform.position.y < deathZone.position.y)
                 ResolveVoid();
         }
-
         public void Release()
         {
             if (!isRiding) return;
@@ -87,6 +88,7 @@ namespace StackTower
             rb.gravityScale = fallGravityScale;
             rb.constraints = RigidbodyConstraints2D.None;
             STGameManager.Instance.OnPlayerTapped();
+            TowerManager.Instance.OnBlockReleased(gameObject); // notify: block is now falling
         }
 
         void OnCollisionStay2D(Collision2D col)

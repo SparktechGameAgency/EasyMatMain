@@ -1,6 +1,14 @@
 apply plugin: 'com.android.library'
 **APPLY_PLUGINS**
 
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core:1.9.0'
+        force 'androidx.core:core-ktx:1.9.0'
+    }
+    exclude group: 'com.android.support', module: 'appcompat-v7'
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 // Android Resolver Dependencies Start
@@ -65,12 +73,3 @@ android {
 **SOURCE_BUILD_SETUP**
 **EXTERNAL_SOURCES**
 
-
-android {
-    sourceSets {
-        main {
-            def unityProjectPath = $/file:///**DIR_UNITYPROJECT**/$.replace("", "/")
-            res.srcDirs += (unityProjectPath +  '/Assets/Plugins/Android/Firebase/res/values/google-services.xml')
-        }
-    }
-} 

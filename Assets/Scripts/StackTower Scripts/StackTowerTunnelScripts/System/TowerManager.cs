@@ -44,6 +44,7 @@ namespace StackTower
         public AlignAbilityButton alignAbilityButton; // drag AlignAbilityButton GO here
 
         private GameObject pendingAlignBlock = null;
+        private GameObject fallingBlock = null;   // block currently in mid-air
 
         public bool HasPendingAlign => pendingAlignBlock != null;
 
@@ -74,6 +75,9 @@ namespace StackTower
 
         public void BlockLanded(GameObject block)
         {
+            // Mid-air window closes — block has touched down
+            fallingBlock = null;
+
             // New block just landed — close any open align window
             ClearPendingAlign();
 
@@ -284,6 +288,14 @@ namespace StackTower
             }
         }
 
+        // ── Called by BlockController.Release() — block is now falling ──────────
+        public void OnBlockReleased(GameObject block)
+        {
+            fallingBlock = block;
+            if (alignAbilityButton != null)
+                alignAbilityButton.OnAlignAvailable();
+        }
+
         // ── Align Ability ─────────────────────────────────────────────────────
         void RegisterPendingAlign(GameObject block)
         {
@@ -304,28 +316,83 @@ namespace StackTower
         // Called by AlignAbilityButton when the player taps it
         public void UseAlignAbility()
         {
+            // ── Mid-air case: block is still falling ─────────────────────────
+            if (fallingBlock != null)
+            {
+                GameObject block = fallingBlock;
+                fallingBlock = null;
+
+                if (alignAbilityButton != null)
+                    alignAbilityButton.OnAlignUnavailable();
+
+                BlockController bc = block.GetComponent<BlockController>();
+                if (bc == null) return;
+
+                Rigidbody2D rb = block.GetComponent<Rigidbody2D>();
+                float fallSpeed = rb != null ? rb.velocity.y : 0f;
+
+                // Reset rotation so climb-point X is reliable
+                block.transform.rotation = Quaternion.identity;
+
+                // Calculate target X
+                Transform lowest = bc.GetLowestClimbPoint();
+                if (lowest == null) return;
+
+                float targetX;
+                if (stackedBlocks.Count == 0)
+                {
+                    // No blocks stacked yet — align to base block
+                    if (baseBlockClimbPoint == null) return;
+                    targetX = baseBlockClimbPoint.position.x;
+                }
+                else
+                {
+                    // Align to top of current stack
+                    GameObject topBlock = GetTopBlock();
+                    if (topBlock == null) return;
+                    BlockController topBC = topBlock.GetComponent<BlockController>();
+                    Transform topHighest = topBC?.GetHighestClimbPoint();
+                    if (topHighest == null) return;
+                    targetX = topHighest.position.x;
+                }
+
+                // Snap X so lowest climb point sits on targetX
+                float xDiff = targetX - lowest.position.x;
+                block.transform.position += new Vector3(xDiff, 0f, 0f);
+
+                // Freeze X + rotation so block falls perfectly straight down
+                if (rb != null)
+                {
+                    rb.velocity = new Vector2(0f, fallSpeed);
+                    rb.constraints = RigidbodyConstraints2D.FreezePositionX |
+                                     RigidbodyConstraints2D.FreezeRotation;
+                }
+
+                Debug.Log("Mid-air align! xDiff: " + xDiff.ToString("F3"));
+                return;
+            }
+
+            // ── Post-landing fallback: bad landing already on stack ────────────
             if (pendingAlignBlock == null) return;
 
-            GameObject block = pendingAlignBlock;
+            GameObject landedBlock = pendingAlignBlock;
             ClearPendingAlign();
 
-            BlockController newBC = block.GetComponent<BlockController>();
+            BlockController newBC = landedBlock.GetComponent<BlockController>();
             if (newBC == null) return;
 
-            Transform lowest = newBC.GetLowestClimbPoint();
-            if (lowest == null) return;
+            Transform landedLowest = newBC.GetLowestClimbPoint();
+            if (landedLowest == null) return;
 
-            float xDiff = 0f;
+            float landedXDiff = 0f;
 
             if (stackedBlocks.Count == 1)
             {
-                // Align to base block
                 if (baseBlockClimbPoint == null) return;
-                xDiff = baseBlockClimbPoint.position.x - lowest.position.x;
+                landedXDiff = baseBlockClimbPoint.position.x - landedLowest.position.x;
             }
             else
             {
-                // Align to block directly below
                 GameObject belowBlock = stackedBlocks[stackedBlocks.Count - 2];
                 if (belowBlock == null) return;
 
@@ -335,28 +402,26 @@ namespace StackTower
                 Transform belowHighest = belowBC.GetHighestClimbPoint();
                 if (belowHighest == null) return;
 
-                xDiff = belowHighest.position.x - lowest.position.x;
+                landedXDiff = belowHighest.position.x - landedLowest.position.x;
             }
 
-            // Snap the block to alignment — no score awarded
-            Rigidbody2D rb = block.GetComponent<Rigidbody2D>();
-            if (rb != null)
-                rb.constraints = RigidbodyConstraints2D.FreezePositionY |
-                                 RigidbodyConstraints2D.FreezeRotation;
+            Rigidbody2D landedRb = landedBlock.GetComponent<Rigidbody2D>();
+            if (landedRb != null)
+                landedRb.constraints = RigidbodyConstraints2D.FreezePositionY |
+                                       RigidbodyConstraints2D.FreezeRotation;
 
-            block.transform.position += new Vector3(xDiff, 0f, 0f);
+            landedBlock.transform.position += new Vector3(landedXDiff, 0f, 0f);
 
-            if (rb != null)
-                rb.constraints = RigidbodyConstraints2D.FreezeAll;
+            if (landedRb != null)
+                landedRb.constraints = RigidbodyConstraints2D.FreezeAll;
 
-            // Cancel the game-over path and let the alien climb normally
             if (alienClimber != null)
             {
                 alienClimber.CancelConnectionFailed();
                 alienClimber.AddClimbPointsFromBlock(newBC);
             }
 
-            Debug.Log("Align ability used! xDiff: " + xDiff.ToString("F3"));
+            Debug.Log("Post-landing align! xDiff: " + landedXDiff.ToString("F3"));
         }
 
 
