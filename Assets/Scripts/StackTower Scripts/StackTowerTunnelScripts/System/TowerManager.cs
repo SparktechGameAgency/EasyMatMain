@@ -174,7 +174,8 @@ namespace StackTower
                             if (LaserAbility.Instance != null)
                                 LaserAbility.Instance.OnBadLanding(block, null);
 
-                            RegisterPendingAlign(block);
+                            // Align ability no longer works once a block has landed —
+                            // it's mid-air only, so we don't re-register a pending align here.
 
                             if (alienClimber != null)
                                 alienClimber.OnConnectionFailed();
@@ -282,7 +283,8 @@ namespace StackTower
                 if (LaserAbility.Instance != null)
                     LaserAbility.Instance.OnBadLanding(block, belowBlock);
 
-                RegisterPendingAlign(block);
+                // Align ability no longer works once a block has landed —
+                // it's mid-air only, so we don't re-register a pending align here.
 
                 if (alienClimber != null)
                     alienClimber.OnConnectionFailed();
