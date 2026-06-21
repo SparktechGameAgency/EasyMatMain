@@ -42,6 +42,7 @@ namespace StackTower
         // ── Align Ability ────────────────────────────────────────
         [Header("Align Ability")]
         public AlignAbilityButton alignAbilityButton; // drag AlignAbilityButton GO here
+        public float alignLerpDuration = 0.15f; // seconds for the align-ability X lerp
 
         private GameObject pendingAlignBlock = null;
         private GameObject fallingBlock = null;   // block currently in mid-air
@@ -356,17 +357,19 @@ namespace StackTower
                     targetX = topHighest.position.x;
                 }
 
-                // Snap X so lowest climb point sits on targetX
+                // Lerp X so lowest climb point sits on targetX (instead of instant snap)
                 float xDiff = targetX - lowest.position.x;
-                block.transform.position += new Vector3(xDiff, 0f, 0f);
+                float startX = block.transform.position.x;
+                float midAirTargetX = startX + xDiff;
 
-                // Freeze X + rotation so block falls perfectly straight down
                 if (rb != null)
                 {
                     rb.velocity = new Vector2(0f, fallSpeed);
-                    rb.constraints = RigidbodyConstraints2D.FreezePositionX |
-                                     RigidbodyConstraints2D.FreezeRotation;
+                    // Keep X free during the lerp; rotation locks immediately
+                    rb.constraints = RigidbodyConstraints2D.FreezeRotation;
                 }
+
+                StartCoroutine(LerpAlignFallingBlockX(block, rb, startX, midAirTargetX, alignLerpDuration));
 
                 Debug.Log("Mid-air align! xDiff: " + xDiff.ToString("F3"));
                 return;
@@ -406,14 +409,14 @@ namespace StackTower
             }
 
             Rigidbody2D landedRb = landedBlock.GetComponent<Rigidbody2D>();
+            float landedStartX = landedBlock.transform.position.x;
+            float landedTargetX = landedStartX + landedXDiff;
+
             if (landedRb != null)
                 landedRb.constraints = RigidbodyConstraints2D.FreezePositionY |
                                        RigidbodyConstraints2D.FreezeRotation;
 
-            landedBlock.transform.position += new Vector3(landedXDiff, 0f, 0f);
-
-            if (landedRb != null)
-                landedRb.constraints = RigidbodyConstraints2D.FreezeAll;
+            StartCoroutine(LerpAlignLandedBlockX(landedBlock, landedRb, landedStartX, landedTargetX, alignLerpDuration));
 
             if (alienClimber != null)
             {
@@ -424,8 +427,65 @@ namespace StackTower
             Debug.Log("Post-landing align! xDiff: " + landedXDiff.ToString("F3"));
         }
 
+        // ── Align Ability: lerp a still-falling block's X toward targetX ───────
+        // X is left unconstrained on the Rigidbody2D while we drive it directly,
+        // so gravity keeps falling the block on Y exactly as before.
+        IEnumerator LerpAlignFallingBlockX(GameObject block, Rigidbody2D rb, float startX, float targetX, float duration)
+        {
+            float elapsed = 0f;
 
-        // ── Called when a trap block lands — registers it in the stack ─────────
+            while (elapsed < duration)
+            {
+                if (block == null || rb == null) yield break; // block destroyed/recycled mid-lerp
+
+                elapsed += Time.deltaTime;
+                float t = duration > 0f ? Mathf.Clamp01(elapsed / duration) : 1f;
+                float newX = Mathf.Lerp(startX, targetX, t);
+
+                rb.position = new Vector2(newX, rb.position.y);
+
+                yield return null;
+            }
+
+            if (block == null || rb == null) yield break;
+
+            rb.position = new Vector2(targetX, rb.position.y);
+
+            // Freeze X + rotation so block falls perfectly straight down
+            rb.constraints = RigidbodyConstraints2D.FreezePositionX | RigidbodyConstraints2D.FreezeRotation;
+        }
+
+        // ── Align Ability: lerp an already-landed (bad landing) block's X ──────
+        // Y/rotation stay frozen on the Rigidbody2D the whole time; we only
+        // move the transform's X, then re-freeze everything once it arrives.
+        IEnumerator LerpAlignLandedBlockX(GameObject block, Rigidbody2D rb, float startX, float targetX, float duration)
+        {
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                if (block == null) yield break; // block destroyed/recycled mid-lerp
+
+                elapsed += Time.deltaTime;
+                float t = duration > 0f ? Mathf.Clamp01(elapsed / duration) : 1f;
+                float newX = Mathf.Lerp(startX, targetX, t);
+
+                Vector3 pos = block.transform.position;
+                block.transform.position = new Vector3(newX, pos.y, pos.z);
+
+                yield return null;
+            }
+
+            if (block == null) yield break;
+
+            Vector3 finalPos = block.transform.position;
+            block.transform.position = new Vector3(targetX, finalPos.y, finalPos.z);
+
+            if (rb != null)
+                rb.constraints = RigidbodyConstraints2D.FreezeAll;
+        }
+
+
         public void TrapBlockLanded(GameObject trap)
         {
             trap.transform.SetParent(worldRoot, true);
