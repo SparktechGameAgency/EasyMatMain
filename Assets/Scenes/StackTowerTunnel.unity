@@ -1146,6 +1146,7 @@ MonoBehaviour:
   speedIncreasePerBlock: 0.1
   maxSpeed: 8
   alignAbilityButton: {fileID: 589214744}
+  alignLerpDuration: 0.15
 --- !u!4 &177457233
 Transform:
   m_ObjectHideFlags: 0
@@ -2139,7 +2140,7 @@ GameObject:
   - component: {fileID: 672612306}
   - component: {fileID: 672612307}
   m_Layer: 0
-  m_Name: LaserAbility
+  m_Name: LaserAbilityManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4923,7 +4924,7 @@ GameObject:
   - component: {fileID: 1584588353}
   - component: {fileID: 1584588352}
   m_Layer: 0
-  m_Name: AsteroidEvent
+  m_Name: AsteroidEventManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6717,9 +6718,9 @@ SceneRoots:
   - {fileID: 672612304}
   - {fileID: 2111925928}
   - {fileID: 177457233}
+  - {fileID: 456632387}
   - {fileID: 1966446975}
   - {fileID: 745713097}
-  - {fileID: 456632387}
   - {fileID: 1904710477}
   - {fileID: 1823324165}
   - {fileID: 2136309444}

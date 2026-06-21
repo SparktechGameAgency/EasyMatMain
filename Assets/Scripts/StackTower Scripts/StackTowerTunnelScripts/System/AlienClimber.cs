@@ -167,11 +167,21 @@ namespace StackTower
         void ApplyFlyEffect()
         {
             // Movement lean calculation
-            Vector3 velocity = (transform.position - lastWorldPos) / Time.deltaTime;
+            // Guard against a zero (or negative, e.g. paused) deltaTime — dividing by it
+            // produces NaN, and Mathf.Lerp toward a NaN target makes currentLean stay
+            // NaN forever afterward, which is what was spamming the Quaternion assertion.
+            if (Time.deltaTime > 0f)
+            {
+                Vector3 velocity = (transform.position - lastWorldPos) / Time.deltaTime;
+                float targetLean = Mathf.Clamp(-velocity.x * 2f, -maxLeanAngle, maxLeanAngle);
+                currentLean = Mathf.Lerp(currentLean, targetLean, leanSmoothing * Time.deltaTime);
+            }
             lastWorldPos = transform.position;
 
-            float targetLean = Mathf.Clamp(-velocity.x * 2f, -maxLeanAngle, maxLeanAngle);
-            currentLean = Mathf.Lerp(currentLean, targetLean, leanSmoothing * Time.deltaTime);
+            // Safety net: if currentLean was already poisoned to NaN before this fix
+            // (or from any other edge case), reset it instead of feeding NaN forever.
+            if (float.IsNaN(currentLean))
+                currentLean = 0f;
 
             // ✅ Bob — ONLY if sprite is on a child GO
             // Prevents conflict with MoveTowards world position

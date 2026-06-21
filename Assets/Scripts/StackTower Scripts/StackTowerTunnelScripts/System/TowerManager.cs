@@ -294,6 +294,13 @@ namespace StackTower
         // ── Called by BlockController.Release() — block is now falling ──────────
         public void OnBlockReleased(GameObject block)
         {
+            BlockController bc = block != null ? block.GetComponent<BlockController>() : null;
+
+            // Trap blocks can't be aligned — leave fallingBlock unset so the
+            // Align button stays unavailable for the whole time it's falling.
+            if (bc != null && bc.IsTrap)
+                return;
+
             fallingBlock = block;
             if (alignAbilityButton != null)
                 alignAbilityButton.OnAlignAvailable();
