@@ -1135,7 +1135,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   worldRoot: {fileID: 745713097}
   blockHeight: 5.5
-  scrollSpeed: 12
+  scrollSpeed: 15
   blocksBeforeScroll: 2
   alienClimber: {fileID: 1846421236}
   alienStartPoint: {fileID: 704844719}
@@ -1147,6 +1147,7 @@ MonoBehaviour:
   maxSpeed: 8
   alignAbilityButton: {fileID: 589214744}
   alignLerpDuration: 0.15
+  alignChargesPerUse: 3
 --- !u!4 &177457233
 Transform:
   m_ObjectHideFlags: 0
@@ -2127,6 +2128,9 @@ MonoBehaviour:
   maxUses: 5
   usesText: {fileID: 1133202772}
   button: {fileID: 589214741}
+  glowOverlay: {fileID: 0}
+  armedColor: {r: 0.72, g: 0.2, b: 1, a: 1}
+  unarmedColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &672612302
 GameObject:
   m_ObjectHideFlags: 0

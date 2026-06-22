@@ -129,10 +129,6 @@ namespace StackTower
             UpdateUI();
             RefreshInteractable();
 
-            // Block align ability from being used on same block
-            if (TowerManager.Instance != null)
-                TowerManager.Instance.ClearPendingAlign();
-
             StartCoroutine(PlayLaserAndReplace());
         }
 

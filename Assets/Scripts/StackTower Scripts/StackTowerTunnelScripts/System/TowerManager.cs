@@ -42,12 +42,11 @@ namespace StackTower
         // ── Align Ability ────────────────────────────────────────
         [Header("Align Ability")]
         public AlignAbilityButton alignAbilityButton; // drag AlignAbilityButton GO here
-        public float alignLerpDuration = 0.15f; // seconds for the align-ability X lerp
+        public float alignLerpDuration = 0.15f;       // seconds for the align X lerp
+        public int alignChargesPerUse = 3;            // blocks guaranteed per activation
 
-        private GameObject pendingAlignBlock = null;
-        private GameObject fallingBlock = null;   // block currently in mid-air
-
-        public bool HasPendingAlign => pendingAlignBlock != null;
+        private bool isAlignArmed = false;
+        private int alignChargesRemaining = 0;
 
         void Awake() => Instance = this;
 
@@ -76,12 +75,6 @@ namespace StackTower
 
         public void BlockLanded(GameObject block)
         {
-            // Mid-air window closes — block has touched down
-            fallingBlock = null;
-
-            // New block just landed — close any open align window
-            ClearPendingAlign();
-
             block.transform.SetParent(worldRoot, true);
             stackedBlocks.Add(block);
             landedBlockCount++;
@@ -99,6 +92,24 @@ namespace StackTower
                 targetRootY -= blockHeight;
 
             RampDifficulty();
+
+            // Consume one armed charge for this block landing
+            if (isAlignArmed)
+            {
+                alignChargesRemaining--;
+                if (alignChargesRemaining <= 0)
+                {
+                    isAlignArmed = false;
+                    alignAbilityButton?.OnAlignDisarmed();
+                    Debug.Log("Auto Align exhausted — power-up consumed.");
+                }
+                else
+                {
+                    alignAbilityButton?.OnAlignChargeUsed(alignChargesRemaining);
+                    Debug.Log("Auto Align charges remaining: " + alignChargesRemaining);
+                }
+            }
+
             StartCoroutine(CheckConnectionNextFrame(block));
         }
 
@@ -296,144 +307,77 @@ namespace StackTower
         {
             BlockController bc = block != null ? block.GetComponent<BlockController>() : null;
 
-            // Trap blocks can't be aligned — leave fallingBlock unset so the
-            // Align button stays unavailable for the whole time it's falling.
-            if (bc != null && bc.IsTrap)
-                return;
+            // Trap blocks are never aligned
+            if (bc != null && bc.IsTrap) return;
 
-            fallingBlock = block;
-            if (alignAbilityButton != null)
-                alignAbilityButton.OnAlignAvailable();
+            // If the power-up is armed, auto-align this block immediately on release
+            if (isAlignArmed)
+                AutoAlignFallingBlock(block);
         }
 
         // ── Align Ability ─────────────────────────────────────────────────────
-        void RegisterPendingAlign(GameObject block)
-        {
-            pendingAlignBlock = block;
 
-            if (alignAbilityButton != null)
-                alignAbilityButton.OnAlignAvailable();
-        }
-
-        public void ClearPendingAlign()
-        {
-            pendingAlignBlock = null;
-
-            if (alignAbilityButton != null)
-                alignAbilityButton.OnAlignUnavailable();
-        }
-
-        // Called by AlignAbilityButton when the player taps it
+        // Called by AlignAbilityButton when the player taps it BEFORE dropping a block.
+        // Arms the power-up for the next alignChargesPerUse consecutive blocks.
         public void UseAlignAbility()
         {
-            // ── Mid-air case: block is still falling ─────────────────────────
-            if (fallingBlock != null)
-            {
-                GameObject block = fallingBlock;
-                fallingBlock = null;
+            if (isAlignArmed) return; // already active, ignore extra taps
 
-                if (alignAbilityButton != null)
-                    alignAbilityButton.OnAlignUnavailable();
+            isAlignArmed = true;
+            alignChargesRemaining = alignChargesPerUse;
 
-                BlockController bc = block.GetComponent<BlockController>();
-                if (bc == null) return;
+            alignAbilityButton?.OnAlignArmed(alignChargesRemaining);
+            Debug.Log("Auto Align armed — " + alignChargesRemaining + " blocks guaranteed.");
+        }
 
-                Rigidbody2D rb = block.GetComponent<Rigidbody2D>();
-                float fallSpeed = rb != null ? rb.velocity.y : 0f;
+        // Performs the actual mid-air alignment; called automatically from OnBlockReleased
+        // when the power-up is armed. The player does NOT press anything at this point.
+        void AutoAlignFallingBlock(GameObject block)
+        {
+            if (block == null) return;
 
-                // Reset rotation so climb-point X is reliable
-                block.transform.rotation = Quaternion.identity;
+            BlockController bc = block.GetComponent<BlockController>();
+            if (bc == null) return;
 
-                // Calculate target X
-                Transform lowest = bc.GetLowestClimbPoint();
-                if (lowest == null) return;
+            Rigidbody2D rb = block.GetComponent<Rigidbody2D>();
+            float fallSpeed = rb != null ? rb.velocity.y : 0f;
 
-                float targetX;
-                if (stackedBlocks.Count == 0)
-                {
-                    // No blocks stacked yet — align to base block
-                    if (baseBlockClimbPoint == null) return;
-                    targetX = baseBlockClimbPoint.position.x;
-                }
-                else
-                {
-                    // Align to top of current stack
-                    GameObject topBlock = GetTopBlock();
-                    if (topBlock == null) return;
-                    BlockController topBC = topBlock.GetComponent<BlockController>();
-                    Transform topHighest = topBC?.GetHighestClimbPoint();
-                    if (topHighest == null) return;
-                    targetX = topHighest.position.x;
-                }
+            // Reset rotation so climb-point X is reliable
+            block.transform.rotation = Quaternion.identity;
 
-                // Lerp X so lowest climb point sits on targetX (instead of instant snap)
-                float xDiff = targetX - lowest.position.x;
-                float startX = block.transform.position.x;
-                float midAirTargetX = startX + xDiff;
+            // Determine target X
+            Transform lowest = bc.GetLowestClimbPoint();
+            if (lowest == null) return;
 
-                if (rb != null)
-                {
-                    rb.velocity = new Vector2(0f, fallSpeed);
-                    // Keep X free during the lerp; rotation locks immediately
-                    rb.constraints = RigidbodyConstraints2D.FreezeRotation;
-                }
-
-                StartCoroutine(LerpAlignFallingBlockX(block, rb, startX, midAirTargetX, alignLerpDuration));
-
-                Debug.Log("Mid-air align! xDiff: " + xDiff.ToString("F3"));
-                return;
-            }
-
-            // ── Post-landing fallback: bad landing already on stack ────────────
-            if (pendingAlignBlock == null) return;
-
-            GameObject landedBlock = pendingAlignBlock;
-            ClearPendingAlign();
-
-            BlockController newBC = landedBlock.GetComponent<BlockController>();
-            if (newBC == null) return;
-
-            Transform landedLowest = newBC.GetLowestClimbPoint();
-            if (landedLowest == null) return;
-
-            float landedXDiff = 0f;
-
-            if (stackedBlocks.Count == 1)
+            float targetX;
+            if (stackedBlocks.Count == 0)
             {
                 if (baseBlockClimbPoint == null) return;
-                landedXDiff = baseBlockClimbPoint.position.x - landedLowest.position.x;
+                targetX = baseBlockClimbPoint.position.x;
             }
             else
             {
-                GameObject belowBlock = stackedBlocks[stackedBlocks.Count - 2];
-                if (belowBlock == null) return;
-
-                BlockController belowBC = belowBlock.GetComponent<BlockController>();
-                if (belowBC == null) return;
-
-                Transform belowHighest = belowBC.GetHighestClimbPoint();
-                if (belowHighest == null) return;
-
-                landedXDiff = belowHighest.position.x - landedLowest.position.x;
+                GameObject topBlock = GetTopBlock();
+                if (topBlock == null) return;
+                BlockController topBC = topBlock.GetComponent<BlockController>();
+                Transform topHighest = topBC?.GetHighestClimbPoint();
+                if (topHighest == null) return;
+                targetX = topHighest.position.x;
             }
 
-            Rigidbody2D landedRb = landedBlock.GetComponent<Rigidbody2D>();
-            float landedStartX = landedBlock.transform.position.x;
-            float landedTargetX = landedStartX + landedXDiff;
+            float xDiff = targetX - lowest.position.x;
+            float startX = block.transform.position.x;
+            float midAirTargetX = startX + xDiff;
 
-            if (landedRb != null)
-                landedRb.constraints = RigidbodyConstraints2D.FreezePositionY |
-                                       RigidbodyConstraints2D.FreezeRotation;
-
-            StartCoroutine(LerpAlignLandedBlockX(landedBlock, landedRb, landedStartX, landedTargetX, alignLerpDuration));
-
-            if (alienClimber != null)
+            if (rb != null)
             {
-                alienClimber.CancelConnectionFailed();
-                alienClimber.AddClimbPointsFromBlock(newBC);
+                rb.velocity = new Vector2(0f, fallSpeed);
+                rb.constraints = RigidbodyConstraints2D.FreezeRotation;
             }
 
-            Debug.Log("Post-landing align! xDiff: " + landedXDiff.ToString("F3"));
+            StartCoroutine(LerpAlignFallingBlockX(block, rb, startX, midAirTargetX, alignLerpDuration));
+
+            Debug.Log("Auto Align fired! xDiff: " + xDiff.ToString("F3") + "  charges left after landing: " + (alignChargesRemaining - 1));
         }
 
         // ── Align Ability: lerp a still-falling block's X toward targetX ───────
@@ -463,37 +407,6 @@ namespace StackTower
             // Freeze X + rotation so block falls perfectly straight down
             rb.constraints = RigidbodyConstraints2D.FreezePositionX | RigidbodyConstraints2D.FreezeRotation;
         }
-
-        // ── Align Ability: lerp an already-landed (bad landing) block's X ──────
-        // Y/rotation stay frozen on the Rigidbody2D the whole time; we only
-        // move the transform's X, then re-freeze everything once it arrives.
-        IEnumerator LerpAlignLandedBlockX(GameObject block, Rigidbody2D rb, float startX, float targetX, float duration)
-        {
-            float elapsed = 0f;
-
-            while (elapsed < duration)
-            {
-                if (block == null) yield break; // block destroyed/recycled mid-lerp
-
-                elapsed += Time.deltaTime;
-                float t = duration > 0f ? Mathf.Clamp01(elapsed / duration) : 1f;
-                float newX = Mathf.Lerp(startX, targetX, t);
-
-                Vector3 pos = block.transform.position;
-                block.transform.position = new Vector3(newX, pos.y, pos.z);
-
-                yield return null;
-            }
-
-            if (block == null) yield break;
-
-            Vector3 finalPos = block.transform.position;
-            block.transform.position = new Vector3(targetX, finalPos.y, finalPos.z);
-
-            if (rb != null)
-                rb.constraints = RigidbodyConstraints2D.FreezeAll;
-        }
-
 
         public void TrapBlockLanded(GameObject trap)
         {
