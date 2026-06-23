@@ -32,6 +32,13 @@ namespace StackTower
         private bool hasResolved = false;
         private float contactTimer = 0f;
 
+        // Auto Align slide — SmoothStep over estimated fall duration, stops on hasResolved
+        private bool isAligning = false;
+        private float alignStartX = 0f;
+        private float alignTargetX = 0f;
+        private float alignDuration = 0f;
+        private float alignElapsed = 0f;
+
         private Transform spawnPoint;
         private Transform deathZone;
         private Rigidbody2D rb;
@@ -75,6 +82,26 @@ namespace StackTower
                 return;
             }
 
+            // Auto Align slide — SmoothStep toward alignTargetX over alignDuration
+            if (isAligning && !hasResolved)
+            {
+                alignElapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(alignDuration > 0f ? alignElapsed / alignDuration : 1f);
+                float smoothT = Mathf.SmoothStep(0f, 1f, t);
+                float newX = Mathf.Lerp(alignStartX, alignTargetX, smoothT);
+
+                Vector3 cur = transform.position;
+                transform.position = new Vector3(newX, cur.y, cur.z);
+
+                if (t >= 1f)
+                {
+                    isAligning = false;
+                    // Lock X for the remainder of the fall so it drops perfectly straight
+                    rb.constraints = RigidbodyConstraints2D.FreezePositionX |
+                                     RigidbodyConstraints2D.FreezeRotation;
+                }
+            }
+
             if (maxFallSpeed > 0 && rb.velocity.y < -maxFallSpeed)
                 rb.velocity = new Vector2(rb.velocity.x, -maxFallSpeed);
 
@@ -89,6 +116,19 @@ namespace StackTower
             rb.constraints = RigidbodyConstraints2D.None;
             STGameManager.Instance.OnPlayerTapped();
             TowerManager.Instance.OnBlockReleased(gameObject); // notify: block is now falling
+        }
+
+        // Called by TowerManager when the Auto Align power-up fires.
+        // duration = estimated time until the block reaches the stack (from kinematic calc).
+        public void StartAlignSlide(float targetX, float duration)
+        {
+            isAligning = true;
+            alignStartX = transform.position.x;
+            alignTargetX = targetX;
+            alignDuration = Mathf.Max(duration, 0.05f); // never zero
+            alignElapsed = 0f;
+            // Lock rotation immediately; X stays free until SmoothStep finishes
+            rb.constraints = RigidbodyConstraints2D.FreezeRotation;
         }
 
         void OnCollisionStay2D(Collision2D col)

@@ -42,7 +42,6 @@ namespace StackTower
         // ── Align Ability ────────────────────────────────────────
         [Header("Align Ability")]
         public AlignAbilityButton alignAbilityButton; // drag AlignAbilityButton GO here
-        public float alignLerpDuration = 0.15f;       // seconds for the align X lerp
         public int alignChargesPerUse = 3;            // blocks guaranteed per activation
 
         private bool isAlignArmed = false;
@@ -340,16 +339,18 @@ namespace StackTower
             if (bc == null) return;
 
             Rigidbody2D rb = block.GetComponent<Rigidbody2D>();
-            float fallSpeed = rb != null ? rb.velocity.y : 0f;
 
             // Reset rotation so climb-point X is reliable
             block.transform.rotation = Quaternion.identity;
+            if (rb != null) rb.angularVelocity = 0f;
 
             // Determine target X
             Transform lowest = bc.GetLowestClimbPoint();
             if (lowest == null) return;
 
             float targetX;
+            Transform topHighest = null;   // also used for landingY below
+
             if (stackedBlocks.Count == 0)
             {
                 if (baseBlockClimbPoint == null) return;
@@ -360,52 +361,47 @@ namespace StackTower
                 GameObject topBlock = GetTopBlock();
                 if (topBlock == null) return;
                 BlockController topBC = topBlock.GetComponent<BlockController>();
-                Transform topHighest = topBC?.GetHighestClimbPoint();
+                topHighest = topBC?.GetHighestClimbPoint();
                 if (topHighest == null) return;
                 targetX = topHighest.position.x;
             }
 
+            // Offset target so the block's lowest climb point lands on targetX
             float xDiff = targetX - lowest.position.x;
-            float startX = block.transform.position.x;
-            float midAirTargetX = startX + xDiff;
+            float slideTargetX = block.transform.position.x + xDiff;
 
-            if (rb != null)
+            // ── Estimate fall duration via kinematic equation ─────────────────
+            // s = v0*t + 0.5*a*t^2  →  solve for t (positive root)
+            // where s = vertical distance to landing Y, v0 = current fall speed (positive),
+            // a = gravity acceleration (positive downward)
+            float currentY = block.transform.position.y;
+            float landingY = (stackedBlocks.Count == 0)
+                ? baseBlockClimbPoint.position.y
+                : topHighest.position.y;   // topHighest resolved above
+            float fallDist = Mathf.Max(0f, currentY - landingY);
+
+            float v0 = rb != null ? Mathf.Abs(rb.velocity.y) : 0f;
+            float gravAccel = (rb != null ? rb.gravityScale : 1f) *
+                              Mathf.Abs(Physics2D.gravity.y);
+
+            float fallDuration;
+            if (gravAccel > 0f)
             {
-                rb.velocity = new Vector2(0f, fallSpeed);
-                rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+                float discriminant = v0 * v0 + 2f * gravAccel * fallDist;
+                fallDuration = (-v0 + Mathf.Sqrt(Mathf.Max(0f, discriminant))) / gravAccel;
             }
-
-            StartCoroutine(LerpAlignFallingBlockX(block, rb, startX, midAirTargetX, alignLerpDuration));
-
-            Debug.Log("Auto Align fired! xDiff: " + xDiff.ToString("F3") + "  charges left after landing: " + (alignChargesRemaining - 1));
-        }
-
-        // ── Align Ability: lerp a still-falling block's X toward targetX ───────
-        // X is left unconstrained on the Rigidbody2D while we drive it directly,
-        // so gravity keeps falling the block on Y exactly as before.
-        IEnumerator LerpAlignFallingBlockX(GameObject block, Rigidbody2D rb, float startX, float targetX, float duration)
-        {
-            float elapsed = 0f;
-
-            while (elapsed < duration)
+            else
             {
-                if (block == null || rb == null) yield break; // block destroyed/recycled mid-lerp
-
-                elapsed += Time.deltaTime;
-                float t = duration > 0f ? Mathf.Clamp01(elapsed / duration) : 1f;
-                float newX = Mathf.Lerp(startX, targetX, t);
-
-                rb.position = new Vector2(newX, rb.position.y);
-
-                yield return null;
+                fallDuration = v0 > 0f ? fallDist / v0 : 0.5f;
             }
+            fallDuration = Mathf.Max(fallDuration, 0.05f);
 
-            if (block == null || rb == null) yield break;
+            // Delegate the slide to BlockController — SmoothStep over the fall duration
+            bc.StartAlignSlide(slideTargetX, fallDuration);
 
-            rb.position = new Vector2(targetX, rb.position.y);
-
-            // Freeze X + rotation so block falls perfectly straight down
-            rb.constraints = RigidbodyConstraints2D.FreezePositionX | RigidbodyConstraints2D.FreezeRotation;
+            Debug.Log("Auto Align fired! xDiff: " + xDiff.ToString("F3") +
+                      "  fallDuration: " + fallDuration.ToString("F2") + "s" +
+                      "  charges left after landing: " + (alignChargesRemaining - 1));
         }
 
         public void TrapBlockLanded(GameObject trap)

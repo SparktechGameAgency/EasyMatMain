@@ -26,7 +26,7 @@ namespace StackTower
         private int usesLeft = 0;
         private bool canUse = false;
         private bool isTrap = false;
-        private GameObject targetBlock = null;  // bad block or trap block
+        private GameObject targetBlock = null;
         private GameObject belowBlock = null;
         private Coroutine windowCoroutine = null;
 
@@ -37,13 +37,12 @@ namespace StackTower
         void Start()
         {
             usesLeft = maxUses;
+            if (laserButton != null) laserButton.interactable = true;
             UpdateUI();
-            RefreshInteractable();
 
             if (laserImage != null) laserImage.gameObject.SetActive(false);
         }
 
-        // ── Called by TowerManager when a normal block lands bad ──────────
         public void OnBadLanding(GameObject bad, GameObject below)
         {
             if (usesLeft <= 0) return;
@@ -52,7 +51,6 @@ namespace StackTower
             targetBlock = bad;
             belowBlock = below;
             canUse = true;
-            RefreshInteractable();
 
             if (windowCoroutine != null) StopCoroutine(windowCoroutine);
             windowCoroutine = StartCoroutine(WindowTimer(triggerDeathOnExpire: false));
@@ -60,12 +58,10 @@ namespace StackTower
             Debug.Log("Laser window open (bad block) for " + windowDuration + "s");
         }
 
-        // ── Called by STGameManager when a trap block lands ───────────────
         public void OnTrapLanding(GameObject trap, GameObject below)
         {
             if (usesLeft <= 0)
             {
-                // Shouldn't reach here (STGameManager checks HasUsesLeft first)
                 TriggerDeathSequence();
                 return;
             }
@@ -74,7 +70,6 @@ namespace StackTower
             targetBlock = trap;
             belowBlock = below;
             canUse = true;
-            RefreshInteractable();
 
             if (windowCoroutine != null) StopCoroutine(windowCoroutine);
             windowCoroutine = StartCoroutine(WindowTimer(triggerDeathOnExpire: true));
@@ -111,10 +106,8 @@ namespace StackTower
             canUse = false;
             targetBlock = null;
             belowBlock = null;
-            RefreshInteractable();
         }
 
-        // ── Called by laser button OnClick ───────────────────────────────
         public void OnLaserPressed()
         {
             if (!canUse || usesLeft <= 0 || targetBlock == null) return;
@@ -127,20 +120,17 @@ namespace StackTower
             canUse = false;
             usesLeft--;
             UpdateUI();
-            RefreshInteractable();
 
             StartCoroutine(PlayLaserAndReplace());
         }
 
         IEnumerator PlayLaserAndReplace()
         {
-            // ── 1. Capture mid point world position BEFORE touching the block ──
-            Vector3 midWorldPos = targetBlock.transform.position; // fallback
+            Vector3 midWorldPos = targetBlock.transform.position;
             BlockController bc = targetBlock.GetComponent<BlockController>();
             if (bc != null && bc.midPoint != null)
                 midWorldPos = bc.midPoint.position;
 
-            // ── 2. Play animation — replace block at the middle frame ──────────
             if (laserImage != null && canvas != null)
             {
                 Vector2 screenPos = Camera.main.WorldToScreenPoint(midWorldPos);
@@ -162,7 +152,6 @@ namespace StackTower
                     {
                         laserImage.sprite = laserSprites[i];
 
-                        // ── Spawn replacement at middle frame ─────
                         if (!replaced && i >= midIndex)
                         {
                             TowerManager.Instance.ReplaceWithAlignedBlock(targetBlock, belowBlock, isTrap);
@@ -174,7 +163,6 @@ namespace StackTower
                         yield return new WaitForSecondsRealtime(frameRate);
                     }
 
-                    // Fallback — if sprites array was empty somehow
                     if (!replaced)
                     {
                         TowerManager.Instance.ReplaceWithAlignedBlock(targetBlock, belowBlock, isTrap);
@@ -184,7 +172,6 @@ namespace StackTower
                 }
                 else
                 {
-                    // No sprites — replace immediately
                     TowerManager.Instance.ReplaceWithAlignedBlock(targetBlock, belowBlock, isTrap);
                     targetBlock = null;
                     belowBlock = null;
@@ -194,21 +181,13 @@ namespace StackTower
             }
             else
             {
-                // No image — replace immediately
                 TowerManager.Instance.ReplaceWithAlignedBlock(targetBlock, belowBlock, isTrap);
                 targetBlock = null;
                 belowBlock = null;
             }
 
-            // ── 4. Unlock input after animation ───────────────────────────────
             if (STGameManager.Instance != null)
                 STGameManager.Instance.UnlockInput();
-        }
-
-        void RefreshInteractable()
-        {
-            if (laserButton != null)
-                laserButton.interactable = canUse && usesLeft > 0;
         }
 
         void UpdateUI()

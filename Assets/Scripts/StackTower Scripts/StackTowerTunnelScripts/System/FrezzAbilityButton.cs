@@ -13,9 +13,10 @@ namespace StackTower
 
         [Header("References")]
         public TextMeshProUGUI usesText;
+        public Button button;
 
         [Header("Freeze Effect")]
-        public Image freezeImage;       // drag the image object here
+        public Image freezeImage;
         public float fadeDuration = 0.5f;
 
         private int usesLeft = 0;
@@ -24,10 +25,10 @@ namespace StackTower
         void Start()
         {
             usesLeft = maxUses;
+            if (button != null) button.interactable = true;
             UpdateUI();
             gameObject.SetActive(false);
 
-            // make sure image starts invisible
             if (freezeImage != null)
                 SetImageAlpha(0f);
         }
@@ -47,16 +48,12 @@ namespace StackTower
             isFreezing = true;
             AsteroidEvent.Instance.SetCountdownFrozen(true);
 
-            // Fade in 0 → 1
             yield return StartCoroutine(FadeImage(0f, 1f));
-
-            // Hold for freeze duration
             yield return new WaitForSeconds(freezeDuration);
 
             AsteroidEvent.Instance.SetCountdownFrozen(false);
             isFreezing = false;
 
-            // Fade out 1 → 0
             yield return StartCoroutine(FadeImage(1f, 0f));
         }
 
@@ -76,6 +73,7 @@ namespace StackTower
 
         void SetImageAlpha(float alpha)
         {
+            if (freezeImage == null) return;
             Color c = freezeImage.color;
             c.a = alpha;
             freezeImage.color = c;
