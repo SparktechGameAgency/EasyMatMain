@@ -13,8 +13,13 @@ namespace StackTower
         public TextMeshProUGUI usesText;
         public Button button;
 
+        [Header("Active Particle")]
+        [Tooltip("World Space particle prefab — spawned behind the button while armed")]
+        public ParticleSystem activeParticlePrefab;
+
         private int usesLeft;
         private bool isArmed = false;
+        private ParticleSystem spawnedParticle;
 
         void Start()
         {
@@ -26,6 +31,7 @@ namespace StackTower
         public void OnAlignDisarmed()
         {
             isArmed = false;
+            StopParticle();
         }
 
         public void OnAlignChargeUsed(int chargesRemaining) { }
@@ -33,6 +39,7 @@ namespace StackTower
         public void OnAlignArmed(int charges)
         {
             isArmed = true;
+            SpawnParticle();
             Debug.Log("AlignAbilityButton: armed for " + charges + " blocks.");
         }
 
@@ -45,6 +52,28 @@ namespace StackTower
             usesLeft--;
             UpdateUI();
             TowerManager.Instance.UseAlignAbility();
+        }
+
+        void SpawnParticle()
+        {
+            if (activeParticlePrefab == null) return;
+            StopParticle(); // clear any leftover
+
+            spawnedParticle = Instantiate(
+                activeParticlePrefab,
+                transform.position,
+                Quaternion.identity,
+                transform          // parent to button so it follows if layout shifts
+            );
+            spawnedParticle.Play();
+        }
+
+        void StopParticle()
+        {
+            if (spawnedParticle == null) return;
+            spawnedParticle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            Destroy(spawnedParticle.gameObject);
+            spawnedParticle = null;
         }
 
         void UpdateUI()

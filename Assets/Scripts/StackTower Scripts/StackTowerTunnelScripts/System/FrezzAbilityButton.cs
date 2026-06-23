@@ -15,12 +15,17 @@ namespace StackTower
         public TextMeshProUGUI usesText;
         public Button button;
 
+        [Header("Active Particle")]
+        [Tooltip("World Space particle prefab — spawned behind the button while freeze is active")]
+        public ParticleSystem activeParticlePrefab;
+
         [Header("Freeze Effect")]
         public Image freezeImage;
         public float fadeDuration = 0.5f;
 
         private int usesLeft = 0;
         private bool isFreezing = false;
+        private ParticleSystem spawnedParticle;
 
         void Start()
         {
@@ -46,6 +51,7 @@ namespace StackTower
         IEnumerator FreezeCountdown()
         {
             isFreezing = true;
+            SpawnParticle();
             AsteroidEvent.Instance.SetCountdownFrozen(true);
 
             yield return StartCoroutine(FadeImage(0f, 1f));
@@ -53,6 +59,7 @@ namespace StackTower
 
             AsteroidEvent.Instance.SetCountdownFrozen(false);
             isFreezing = false;
+            StopParticle();
 
             yield return StartCoroutine(FadeImage(1f, 0f));
         }
@@ -77,6 +84,28 @@ namespace StackTower
             Color c = freezeImage.color;
             c.a = alpha;
             freezeImage.color = c;
+        }
+
+        void SpawnParticle()
+        {
+            if (activeParticlePrefab == null) return;
+            StopParticle();
+
+            spawnedParticle = Instantiate(
+                activeParticlePrefab,
+                button != null ? button.transform.position : transform.position,
+                Quaternion.identity,
+                button != null ? button.transform : transform
+            );
+            spawnedParticle.Play();
+        }
+
+        void StopParticle()
+        {
+            if (spawnedParticle == null) return;
+            spawnedParticle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            Destroy(spawnedParticle.gameObject);
+            spawnedParticle = null;
         }
 
         void UpdateUI()

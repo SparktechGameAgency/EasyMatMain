@@ -188,7 +188,7 @@ MonoBehaviour:
   settleTime: 0.25
   spawnZ: 3.34
   spawnScale: {x: 0.7, y: 0.7, z: 1}
-  deathParticle: {fileID: 2937653908393112556, guid: 51fe2d9150277144f9ee922beb3c36ff,
+  deathParticle: {fileID: 2937653908393112556, guid: 5acc8fbd25f74ff4fb2f94f8636c15f8,
     type: 3}
 --- !u!1 &1254899654744479203
 GameObject:

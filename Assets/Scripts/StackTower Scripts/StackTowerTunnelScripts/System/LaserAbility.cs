@@ -17,6 +17,10 @@ namespace StackTower
         public Button laserButton;
         public TextMeshProUGUI usesText;
 
+        [Header("Active Particle")]
+        [Tooltip("World Space particle prefab — spawned behind the button while the laser window is open")]
+        public ParticleSystem activeParticlePrefab;
+
         [Header("Laser Animation")]
         public Image laserImage;
         public Canvas canvas;
@@ -29,6 +33,7 @@ namespace StackTower
         private GameObject targetBlock = null;
         private GameObject belowBlock = null;
         private Coroutine windowCoroutine = null;
+        private ParticleSystem spawnedParticle;
 
         public bool HasUsesLeft => usesLeft > 0;
 
@@ -51,6 +56,7 @@ namespace StackTower
             targetBlock = bad;
             belowBlock = below;
             canUse = true;
+            SpawnParticle();
 
             if (windowCoroutine != null) StopCoroutine(windowCoroutine);
             windowCoroutine = StartCoroutine(WindowTimer(triggerDeathOnExpire: false));
@@ -70,6 +76,7 @@ namespace StackTower
             targetBlock = trap;
             belowBlock = below;
             canUse = true;
+            SpawnParticle();
 
             if (windowCoroutine != null) StopCoroutine(windowCoroutine);
             windowCoroutine = StartCoroutine(WindowTimer(triggerDeathOnExpire: true));
@@ -106,6 +113,7 @@ namespace StackTower
             canUse = false;
             targetBlock = null;
             belowBlock = null;
+            StopParticle();
         }
 
         public void OnLaserPressed()
@@ -120,6 +128,7 @@ namespace StackTower
             canUse = false;
             usesLeft--;
             UpdateUI();
+            StopParticle();
 
             StartCoroutine(PlayLaserAndReplace());
         }
@@ -188,6 +197,28 @@ namespace StackTower
 
             if (STGameManager.Instance != null)
                 STGameManager.Instance.UnlockInput();
+        }
+
+        void SpawnParticle()
+        {
+            if (activeParticlePrefab == null) return;
+            StopParticle();
+
+            spawnedParticle = Instantiate(
+                activeParticlePrefab,
+                laserButton != null ? laserButton.transform.position : transform.position,
+                Quaternion.identity,
+                laserButton != null ? laserButton.transform : transform
+            );
+            spawnedParticle.Play();
+        }
+
+        void StopParticle()
+        {
+            if (spawnedParticle == null) return;
+            spawnedParticle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            Destroy(spawnedParticle.gameObject);
+            spawnedParticle = null;
         }
 
         void UpdateUI()
