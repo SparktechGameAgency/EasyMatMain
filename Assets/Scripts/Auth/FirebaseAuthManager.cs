@@ -81,6 +81,35 @@ public class FirebaseAuthManager : MonoBehaviour
     [Header("── SHARED ──")]
     public GameObject loadingPanel;
 
+    // ── SINGLETON GUARD ────────────────────────────────────────────
+    // The MainMenu scene has a stray, unconfigured duplicate of this
+    // component sitting on another GameObject. If two instances both
+    // run Start(), they race on the static session fields/flags below
+    // (e.g. returningFromGame) and can knock a logged-in user back to
+    // the login screen. Only let one *configured* instance run.
+    public static FirebaseAuthManager Instance;
+
+    void Awake()
+    {
+        bool isConfigured = loginPanel != null || registerPanel != null || homepagePanel != null;
+
+        if (!isConfigured)
+        {
+            Debug.LogWarning("⚠️ FirebaseAuthManager on '" + gameObject.name + "' has no panels assigned — disabling stray duplicate.");
+            enabled = false;
+            return;
+        }
+
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogWarning("⚠️ Duplicate FirebaseAuthManager found on '" + gameObject.name + "' — disabling it.");
+            enabled = false;
+            return;
+        }
+
+        Instance = this;
+    }
+
     // ── START ──────────────────────────────────────────────────────
     void Start()
     {
@@ -116,7 +145,12 @@ public class FirebaseAuthManager : MonoBehaviour
             }
             else
             {
-                SetLoginStatus("Please login or register.");
+                // ✅ Session is already valid (e.g. app was reopened and the
+                // device-linked session survived) — go straight to homepage
+                // instead of stranding a logged-in user on the login screen.
+                Debug.Log("✅ Session already active — restoring homepage.");
+                ShowPanel("homepage");
+                StartCoroutine(LoadUserDataSilentlyDelayed());
             }
             return;
         }
