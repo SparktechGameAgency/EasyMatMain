@@ -1,10 +1,10 @@
-using Firebase.Firestore;
+using PlayFab;
+using PlayFab.ClientModels;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using TMPro;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UI;
 
 public class LeaderboardManager : MonoBehaviour
@@ -13,7 +13,15 @@ public class LeaderboardManager : MonoBehaviour
     public Transform listContainer;
     public GameObject playerRowPrefab;
 
-    private FirebaseFirestore db;
+    private const string XP_STAT_NAME = "XP";
+    private const string PUBLIC_DATA_KEY = "publicProfile";
+
+    [Serializable]
+    private class PublicProfileData
+    {
+        public string profilePicBase64;
+    }
+
     private List<GameObject> spawnedRows = new List<GameObject>();
 
     void OnEnable()
@@ -24,22 +32,18 @@ public class LeaderboardManager : MonoBehaviour
     IEnumerator LoadAfterDelay()
     {
         yield return new WaitForSeconds(0.5f);
-        db = FirebaseFirestore.DefaultInstance;
         LoadLeaderboard();
     }
 
     public void LoadLeaderboard()
     {
-        if (db == null) db = FirebaseFirestore.DefaultInstance;
-
-        var auth = Firebase.Auth.FirebaseAuth.DefaultInstance;
-        if (auth.CurrentUser == null)
+        if (!PlayFabClientAPI.IsClientLoggedIn())
         {
             Debug.LogError("❌ Not logged in — cannot load leaderboard.");
             return;
         }
 
-        Debug.Log("✅ Logged in as: " + auth.CurrentUser.Email);
+        Debug.Log("✅ Logged in as: " + FirebaseAuthManager.CurrentEmail);
 
         foreach (var row in spawnedRows)
             Destroy(row);
@@ -47,75 +51,47 @@ public class LeaderboardManager : MonoBehaviour
 
         Debug.Log("Loading leaderboard...");
 
-        db.Collection("users")
-          .OrderByDescending("xp")
-          .GetSnapshotAsync()
-          .ContinueWith(task =>
-          {
-              UnityMainThreadDispatcher.Instance().Enqueue(() =>
-              {
-                  if (task.IsFaulted)
-                  {
-                      Debug.LogError("❌ Leaderboard failed: " + task.Exception);
-                      return;
-                  }
+        PlayFabClientAPI.GetLeaderboard(new GetLeaderboardRequest
+        {
+            StatisticName = XP_STAT_NAME,
+            StartPosition = 0,
+            MaxResultsCount = 100
+        },
+        result =>
+        {
+            Debug.Log("✅ Users loaded: " + result.Leaderboard.Count);
 
-                  List<DocumentSnapshot> users = task.Result.Documents
-                      .OrderByDescending(doc =>
-                      {
-                          doc.TryGetValue("xp", out long xp);
-                          return xp;
-                      })
-                      .ToList();
-
-                  Debug.Log("✅ Users loaded: " + users.Count);
-
-                  for (int i = 0; i < users.Count; i++)
-                  {
-                      SpawnRow(users[i], i + 1);
-                  }
-              });
-          });
+            foreach (var entry in result.Leaderboard)
+                SpawnRow(entry);
+        },
+        error => Debug.LogError("❌ Leaderboard failed: " + error.GenerateErrorReport()));
     }
 
-    void SpawnRow(DocumentSnapshot doc, int rank)
+    void SpawnRow(PlayerLeaderboardEntry entry)
     {
-        // ✅ Null check for prefab and container
         if (playerRowPrefab == null || listContainer == null)
         {
             Debug.LogError("❌ playerRowPrefab or listContainer is null!");
             return;
         }
 
-        // ✅ Safe defaults — no null crash
-        string username = "Unknown";
-        long xp = 0;
-        string picUrl = "";
-
-        if (doc.ContainsField("username")) doc.TryGetValue("username", out username);
-        if (doc.ContainsField("xp")) doc.TryGetValue("xp", out xp);
-        if (doc.ContainsField("profilePicUrl")) doc.TryGetValue("profilePicUrl", out picUrl);
-
-        // ✅ Extra null safety
-        if (string.IsNullOrEmpty(username)) username = "Unknown";
-        if (string.IsNullOrEmpty(picUrl)) picUrl = "";
+        string username = string.IsNullOrEmpty(entry.DisplayName) ? "Unknown" : entry.DisplayName;
+        int xp = entry.StatValue;
+        int rank = entry.Position + 1;
 
         GameObject row = Instantiate(playerRowPrefab, listContainer);
         if (row == null) return;
         spawnedRows.Add(row);
 
-        // ✅ Safe UI find
         TMP_Text rankText = row.transform.Find("RankBadge/RankText")?.GetComponent<TMP_Text>();
         TMP_Text nameText = row.transform.Find("UsernameText")?.GetComponent<TMP_Text>();
         TMP_Text xpText = row.transform.Find("XPText")?.GetComponent<TMP_Text>();
         Image profileImage = row.transform.Find("ProfileImage")?.GetComponent<Image>();
 
-        // ✅ Null check before assigning text
         if (rankText != null) rankText.text = rank.ToString();
         if (nameText != null) nameText.text = username;
         if (xpText != null) xpText.text = xp + " XP";
 
-        // ✅ Rank badge color
         if (rankText != null)
         {
             rankText.color = rank switch
@@ -127,32 +103,40 @@ public class LeaderboardManager : MonoBehaviour
             };
         }
 
-        // ✅ Only load image if URL is valid
-        if (profileImage != null && !string.IsNullOrEmpty(picUrl))
-            StartCoroutine(LoadImageFromUrl(picUrl, profileImage));
+        if (profileImage != null)
+            LoadProfilePicture(entry.PlayFabId, profileImage);
     }
 
-    IEnumerator LoadImageFromUrl(string url, Image targetImage)
+    void LoadProfilePicture(string playFabId, Image targetImage)
     {
-        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
+        PlayFabClientAPI.GetUserData(new GetUserDataRequest
         {
-            yield return request.SendWebRequest();
+            PlayFabId = playFabId,
+            Keys = new List<string> { PUBLIC_DATA_KEY }
+        },
+        result =>
+        {
+            if (targetImage == null) return; // row may have been destroyed already
 
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning("⚠️ Failed to load image: " + request.error);
-                yield break;
-            }
+            if (!result.Data.TryGetValue(PUBLIC_DATA_KEY, out var record) || string.IsNullOrEmpty(record.Value))
+                return;
 
-            Texture2D texture = DownloadHandlerTexture.GetContent(request);
+            var publicData = JsonUtility.FromJson<PublicProfileData>(record.Value);
+            if (string.IsNullOrEmpty(publicData.profilePicBase64))
+                return;
+
+            byte[] bytes = Convert.FromBase64String(publicData.profilePicBase64);
+            Texture2D texture = new Texture2D(2, 2);
+            texture.LoadImage(bytes);
+
             Sprite sprite = Sprite.Create(
                 texture,
                 new Rect(0, 0, texture.width, texture.height),
                 new Vector2(0.5f, 0.5f)
             );
 
-            if (targetImage != null)
-                targetImage.sprite = sprite;
-        }
+            targetImage.sprite = sprite;
+        },
+        error => Debug.LogWarning("⚠️ Failed to load picture for " + playFabId + ": " + error.GenerateErrorReport()));
     }
 }

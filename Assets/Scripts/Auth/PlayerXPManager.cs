@@ -1,8 +1,7 @@
+using PlayFab;
+using PlayFab.ClientModels;
 using System.Collections;
 using System.Collections.Generic;
-using Firebase;
-using Firebase.Auth;
-using Firebase.Firestore;
 using UnityEngine;
 
 public class PlayerXPManager : MonoBehaviour
@@ -15,10 +14,7 @@ public class PlayerXPManager : MonoBehaviour
     private const string KEY_BEST_BALL = "BestScore_Ball";
     private const string KEY_BEST_SNAKE = "BestScore_Snake";
     private const string KEY_BEST_BLOCK = "BestScore_Block";
-
-    private FirebaseFirestore db;
-    private FirebaseAuth auth;
-    private bool firebaseReady = false;
+    private const string XP_STAT_NAME = "XP";
 
     private List<(int score, GameType game)> pendingScores = new List<(int, GameType)>();
 
@@ -29,8 +25,10 @@ public class PlayerXPManager : MonoBehaviour
             Instance = this;
             transform.SetParent(null);
             DontDestroyOnLoad(gameObject);
-            Debug.Log("? PlayerXPManager instance created at root.");
-            StartCoroutine(InitFirebase());
+            Debug.Log("✅ PlayerXPManager instance created at root.");
+
+            if (pendingScores.Count > 0 && PlayFabClientAPI.IsClientLoggedIn())
+                FlushPending();
         }
         else if (Instance != this)
         {
@@ -38,57 +36,37 @@ public class PlayerXPManager : MonoBehaviour
         }
     }
 
-    IEnumerator InitFirebase()
+    void FlushPending()
     {
-        Debug.Log("?? Initializing Firebase...");
-
-        var task = FirebaseApp.CheckAndFixDependenciesAsync();
-        yield return new WaitUntil(() => task.IsCompleted);
-
-        if (task.Result == DependencyStatus.Available)
-        {
-            db = FirebaseFirestore.DefaultInstance;
-            auth = FirebaseAuth.DefaultInstance;
-            firebaseReady = true;
-            Debug.Log("? Firebase ready in PlayerXPManager!");
-
-            if (pendingScores.Count > 0)
-            {
-                Debug.Log("? Flushing " + pendingScores.Count + " pending score(s)...");
-                List<(int, GameType)> toFlush = new List<(int, GameType)>(pendingScores);
-                pendingScores.Clear();
-                foreach (var (s, g) in toFlush)
-                    StartCoroutine(ProcessScore(s, g));
-            }
-        }
-        else
-        {
-            Debug.LogError("? Firebase failed: " + task.Result);
-        }
+        Debug.Log("✅ Flushing " + pendingScores.Count + " pending score(s)...");
+        List<(int, GameType)> toFlush = new List<(int, GameType)>(pendingScores);
+        pendingScores.Clear();
+        foreach (var (s, g) in toFlush)
+            StartCoroutine(ProcessScore(s, g));
     }
 
-    // ??? Public call site ????????????????????????????????????????????????????
+    // ─── Public call site ───────────────────────────────────────────────────
     // Each game passes its own GameType so bests are tracked separately.
     //
-    // ChixGameManager  ? PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Chix);
-    // GameManager      ? PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Ball);
-    // GameHandler      ? PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Snake);
-    // BlockManager     ? PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Block);
-    // ?????????????????????????????????????????????????????????????????????????
+    // ChixGameManager  → PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Chix);
+    // GameManager      → PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Ball);
+    // GameHandler      → PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Snake);
+    // BlockManager     → PlayerXPManager.SaveScore(score, PlayerXPManager.GameType.Block);
+    // ─────────────────────────────────────────────────────────────────────────
     public static void SaveScore(int gameScore, GameType game)
     {
-        Debug.Log($"?? SaveScore called: {gameScore} [{game}]");
+        Debug.Log($"💾 SaveScore called: {gameScore} [{game}]");
 
         if (Instance == null)
         {
-            Debug.LogWarning("?? Creating PlayerXPManager on the fly...");
+            Debug.LogWarning("⚠️ Creating PlayerXPManager on the fly...");
             GameObject go = new GameObject("PlayerXPManager");
             go.AddComponent<PlayerXPManager>();
         }
 
-        if (!Instance.firebaseReady)
+        if (!PlayFabClientAPI.IsClientLoggedIn())
         {
-            Debug.LogWarning($"? Queuing score: {gameScore} [{game}]");
+            Debug.LogWarning($"⏳ Queuing score: {gameScore} [{game}]");
             Instance.pendingScores.Add((gameScore, game));
             return;
         }
@@ -96,18 +74,18 @@ public class PlayerXPManager : MonoBehaviour
         Instance.StartCoroutine(Instance.ProcessScore(gameScore, game));
     }
 
-    // ??? Core logic ??????????????????????????????????????????????????????????
+    // ─── Core logic ─────────────────────────────────────────────────────────
     IEnumerator ProcessScore(int newScore, GameType game)
     {
         if (newScore <= 0)
         {
-            Debug.LogWarning("?? Score is 0 � skipping.");
+            Debug.LogWarning("⚠️ Score is 0 — skipping.");
             yield break;
         }
 
-        if (auth.CurrentUser == null)
+        if (!PlayFabClientAPI.IsClientLoggedIn())
         {
-            Debug.LogError("? Not logged in!");
+            Debug.LogError("❌ Not logged in!");
             yield break;
         }
 
@@ -129,44 +107,69 @@ public class PlayerXPManager : MonoBehaviour
         PlayerPrefs.Save();
         Debug.Log($"[XP] {game}: New best {newScore} (was {oldBest}). Adding +{diff} XP.");
 
-        // 4. Read current total XP from Firestore, add only the diff
-        string uid = auth.CurrentUser.UserId;
-        DocumentReference userRef = db.Collection("users").Document(uid);
-
-        var readTask = userRef.GetSnapshotAsync();
-        yield return new WaitUntil(() => readTask.IsCompleted);
-
-        if (readTask.IsFaulted)
+        // 4. Read current total XP from PlayFab statistics, add only the diff
+        var readTask = new StatResult();
+        PlayFabClientAPI.GetPlayerStatistics(new GetPlayerStatisticsRequest
         {
-            Debug.LogError("? Read failed: " + readTask.Exception);
-            yield break;
-        }
-
-        if (!readTask.Result.Exists)
+            StatisticNames = new List<string> { XP_STAT_NAME }
+        },
+        result =>
         {
-            Debug.LogError("? User document not found for UID: " + uid);
+            readTask.Done = true;
+            readTask.Success = true;
+            var stat = result.Statistics.Find(s => s.StatisticName == XP_STAT_NAME);
+            readTask.CurrentXP = stat != null ? stat.Value : 0;
+        },
+        error =>
+        {
+            readTask.Done = true;
+            readTask.Success = false;
+            Debug.LogError("❌ Read failed: " + error.GenerateErrorReport());
+        });
+
+        yield return new WaitUntil(() => readTask.Done);
+
+        if (!readTask.Success)
             yield break;
-        }
 
-        long currentXP = 0;
-        if (readTask.Result.ContainsField("xp"))
-            readTask.Result.TryGetValue("xp", out currentXP);
-
-        long newXP = currentXP + diff;
-        Debug.Log($"?? {currentXP} + {diff} = {newXP}");
+        int newXP = readTask.CurrentXP + diff;
+        Debug.Log($"🔢 {readTask.CurrentXP} + {diff} = {newXP}");
 
         // 5. Write updated total XP
-        var data = new Dictionary<string, object> { { "xp", newXP } };
-        var writeTask = userRef.SetAsync(data, SetOptions.MergeAll);
-        yield return new WaitUntil(() => writeTask.IsCompleted);
+        var writeTask = new StatResult();
+        PlayFabClientAPI.UpdatePlayerStatistics(new UpdatePlayerStatisticsRequest
+        {
+            Statistics = new List<StatisticUpdate>
+            {
+                new StatisticUpdate { StatisticName = XP_STAT_NAME, Value = newXP }
+            }
+        },
+        result =>
+        {
+            writeTask.Done = true;
+            writeTask.Success = true;
+        },
+        error =>
+        {
+            writeTask.Done = true;
+            writeTask.Success = false;
+            Debug.LogError("❌ Save failed: " + error.GenerateErrorReport());
+        });
 
-        if (writeTask.IsFaulted)
-            Debug.LogError("? Save failed: " + writeTask.Exception);
-        else
-            Debug.Log($"? XP saved! +{diff} ? Total: {newXP}");
+        yield return new WaitUntil(() => writeTask.Done);
+
+        if (writeTask.Success)
+            Debug.Log($"✅ XP saved! +{diff} → Total: {newXP}");
     }
 
-    // ??? Helpers ?????????????????????????????????????????????????????????????
+    private class StatResult
+    {
+        public bool Done;
+        public bool Success;
+        public int CurrentXP;
+    }
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
     private static string GetPrefKey(GameType game)
     {
         switch (game)
