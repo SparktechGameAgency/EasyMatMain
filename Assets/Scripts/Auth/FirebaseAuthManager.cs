@@ -1,24 +1,40 @@
-using Firebase;
-using Firebase.Auth;
-using Firebase.Firestore;
-using Firebase.Storage;
 using Mapbox.Examples.Voxels;
+using PlayFab;
+using PlayFab.ClientModels;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UI;
 
 public class FirebaseAuthManager : MonoBehaviour
 {
-    private FirebaseAuth auth;
-    private FirebaseFirestore db;
-    private FirebaseStorage storage;
-    private StorageReference storageRef;
-    private bool firebaseReady = false;
+    // ── Cross-script session state (replaces FirebaseAuth.DefaultInstance.CurrentUser) ──
+    public static string CurrentPlayFabId;
+    public static string CurrentEmail;
+    public static string CurrentUsername;
+    public static bool IsLoggedIn => PlayFabClientAPI.IsClientLoggedIn();
+
+    private const string PUBLIC_DATA_KEY = "publicProfile";
+    private const string PRIVATE_DATA_KEY = "privateProfile";
+    private const string XP_STAT_NAME = "XP";
+
+    [Serializable]
+    private class PublicProfileData
+    {
+        public string profilePicBase64;
+    }
+
+    [Serializable]
+    private class PrivateProfileData
+    {
+        public string phone;
+    }
+
+    private bool sdkReady = false;
     private bool isProcessing = false;
 
     [Header("── PANELS ──")]
@@ -60,15 +76,43 @@ public class FirebaseAuthManager : MonoBehaviour
 
     [Header("── VISOHUNT PANEL ──")]
     public TMP_Text visoHunt_UsernameText;   // drag username text from Visohunt panel
-    public Image visoHunt_ProfilePicture; // 
+    public Image visoHunt_ProfilePicture; //
 
     [Header("── SHARED ──")]
     public GameObject loadingPanel;
 
+    // ── SINGLETON GUARD ────────────────────────────────────────────
+    // The MainMenu scene has a stray, unconfigured duplicate of this
+    // component sitting on another GameObject. If two instances both
+    // run Start(), they race on the static session fields/flags below
+    // (e.g. returningFromGame) and can knock a logged-in user back to
+    // the login screen. Only let one *configured* instance run.
+    public static FirebaseAuthManager Instance;
+
+    void Awake()
+    {
+        bool isConfigured = loginPanel != null || registerPanel != null || homepagePanel != null;
+
+        if (!isConfigured)
+        {
+            Debug.LogWarning("⚠️ FirebaseAuthManager on '" + gameObject.name + "' has no panels assigned — disabling stray duplicate.");
+            enabled = false;
+            return;
+        }
+
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogWarning("⚠️ Duplicate FirebaseAuthManager found on '" + gameObject.name + "' — disabling it.");
+            enabled = false;
+            return;
+        }
+
+        Instance = this;
+    }
+
     // ── START ──────────────────────────────────────────────────────
     void Start()
     {
-        // ✅ Use static flag instead of PlayerPrefs
         bool panelRouterHandling = FirebaseAuthManager.returningFromGame;
         FirebaseAuthManager.returningFromGame = false; // reset after reading
 
@@ -78,7 +122,6 @@ public class FirebaseAuthManager : MonoBehaviour
         }
         else
         {
-            // ✅ Hide all auth panels
             if (loginPanel) loginPanel.SetActive(false);
             if (registerPanel) registerPanel.SetActive(false);
             if (homepagePanel) homepagePanel.SetActive(false);
@@ -88,99 +131,138 @@ public class FirebaseAuthManager : MonoBehaviour
         SetRegisterConfirmInteractable(false);
         SetLoginStatus("Initializing...");
 
-        FirebaseApp.CheckAndFixDependenciesAsync().ContinueWith(task =>
+        if (PlayFabClientAPI.IsClientLoggedIn())
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(() =>
+            // ✅ Session survived a scene load within this app run — same as a persisted Firebase user.
+            sdkReady = true;
+            SetLoginConfirmInteractable(true);
+            SetRegisterConfirmInteractable(true);
+
+            if (panelRouterHandling)
             {
-                if (task.Result == DependencyStatus.Available)
-                {
-                    auth = FirebaseAuth.DefaultInstance;
-                    db = FirebaseFirestore.DefaultInstance;
-                    storage = FirebaseStorage.DefaultInstance;
-                    storageRef = storage.RootReference;
-                    firebaseReady = true;
+                Debug.Log("✅ Returning from game — loading silently.");
+                StartCoroutine(LoadUserDataSilentlyDelayed());
+            }
+            else
+            {
+                // ✅ Session is already valid (e.g. app was reopened and the
+                // device-linked session survived) — go straight to homepage
+                // instead of stranding a logged-in user on the login screen.
+                Debug.Log("✅ Session already active — restoring homepage.");
+                ShowPanel("homepage");
+                StartCoroutine(LoadUserDataSilentlyDelayed());
+            }
+            return;
+        }
 
-                    Debug.Log("✅ Firebase Ready!");
-                    SetLoginConfirmInteractable(true);
-                    SetRegisterConfirmInteractable(true);
+        // ── Cold start: try silent device-linked auto-login (no password stored) ──
+        SetLoginStatus("Checking saved session...");
+        TryDeviceAutoLogin(panelRouterHandling);
+    }
 
-                    if (panelRouterHandling && auth.CurrentUser != null)
-                    {
-                        Debug.Log("✅ Returning from game — loading silently.");
-                        StartCoroutine(LoadUserDataSilentlyDelayed(auth.CurrentUser));
-                    }
-                    else
-                    {
-                        SetLoginStatus("Please login or register.");
-                    }
-                }
-                else
-                {
-                    SetLoginStatus("Firebase failed to load.");
-                    Debug.LogError("Firebase FAILED: " + task.Result);
-                }
-            });
+    // ── DEVICE AUTO-LOGIN ──────────────────────────────────────────
+    void TryDeviceAutoLogin(bool panelRouterHandling)
+    {
+        string deviceId = SystemInfo.deviceUniqueIdentifier;
+
+        PlayFabClientAPI.LoginWithCustomID(new LoginWithCustomIDRequest
+        {
+            CustomId = deviceId,
+            CreateAccount = false,
+            InfoRequestParameters = new GetPlayerCombinedInfoRequestParams
+            {
+                GetUserAccountInfo = true,
+                GetUserData = true
+            }
+        },
+        result =>
+        {
+            sdkReady = true;
+            SetLoginConfirmInteractable(true);
+            SetRegisterConfirmInteractable(true);
+            CacheSessionInfo(result);
+
+            Debug.Log("✅ Auto-logged in via device ID: " + CurrentEmail);
+
+            if (panelRouterHandling)
+                LoadUserDataSilently(result);
+            else
+                LoadUserDataAndShowHomepage(result);
+        },
+        error =>
+        {
+            sdkReady = true;
+            SetLoginConfirmInteractable(true);
+            SetRegisterConfirmInteractable(true);
+            Debug.Log("ℹ️ No saved device session (" + error.Error + ") — showing login.");
+            SetLoginStatus("Please login or register.");
         });
     }
 
-    IEnumerator LoadUserDataSilentlyDelayed(FirebaseUser user)
+    // ── Link this device to the account so future cold starts auto-login ──
+    void LinkDeviceToAccount()
     {
-        yield return new WaitForSeconds(1f);
-        LoadUserDataSilently(user);
+        PlayFabClientAPI.LinkCustomID(new LinkCustomIDRequest
+        {
+            CustomId = SystemInfo.deviceUniqueIdentifier,
+            ForceLink = true
+        },
+        result => Debug.Log("✅ Device linked for auto-login."),
+        error => Debug.LogWarning("⚠️ Device link failed: " + error.GenerateErrorReport()));
     }
 
-    void LoadUserDataSilently(FirebaseUser user)
+    void CacheSessionInfo(LoginResult result)
     {
-        db.Collection("users").Document(user.UserId).GetSnapshotAsync()
-            .ContinueWith(task =>
-            {
-                UnityMainThreadDispatcher.Instance().Enqueue(() =>
-                {
-                    string displayUsername = user.DisplayName ?? "";
-                    string displayEmail = user.Email ?? "";
-                    string displayPhone = "";
+        CurrentPlayFabId = result.PlayFabId;
+        CurrentEmail = result.InfoResultPayload?.AccountInfo?.PrivateInfo?.Email ?? CurrentEmail;
+        CurrentUsername = result.InfoResultPayload?.AccountInfo?.TitleInfo?.DisplayName ?? CurrentUsername;
+    }
 
-                    if (!task.IsFaulted && task.Result.Exists)
-                    {
-                        if (task.Result.TryGetValue("username", out string fsUsername)
-                            && !string.IsNullOrEmpty(fsUsername))
-                            displayUsername = fsUsername;
+    IEnumerator LoadUserDataSilentlyDelayed()
+    {
+        yield return new WaitForSeconds(1f);
 
-                        if (task.Result.TryGetValue("phone", out string fsPhone))
-                            displayPhone = fsPhone;
-                    }
+        PlayFabClientAPI.GetAccountInfo(new GetAccountInfoRequest(), result =>
+        {
+            CurrentPlayFabId = result.AccountInfo.PlayFabId;
+            CurrentEmail = result.AccountInfo.PrivateInfo?.Email ?? CurrentEmail;
+            CurrentUsername = result.AccountInfo.TitleInfo?.DisplayName ?? CurrentUsername;
+            LoadUserDataSilently(null);
+        },
+        error => Debug.LogError("❌ GetAccountInfo failed: " + error.GenerateErrorReport()));
+    }
 
-                    if (string.IsNullOrEmpty(displayUsername))
-                        displayUsername = user.Email ?? "";
+    void LoadUserDataSilently(LoginResult loginResult)
+    {
+        PlayFabClientAPI.GetUserData(new GetUserDataRequest
+        {
+            Keys = new List<string> { PRIVATE_DATA_KEY, PUBLIC_DATA_KEY }
+        },
+        result =>
+        {
+            string displayUsername = CurrentUsername ?? "";
+            string displayEmail = CurrentEmail ?? "";
+            string displayPhone = ReadPrivateData(result.Data).phone ?? "";
 
-                    // ✅ Update all UI texts
-                    if (home_UsernameText != null) home_UsernameText.text = displayUsername;
-                    if (home_TopUsername != null) home_TopUsername.text = displayUsername;
-                    if (profile_Username != null) profile_Username.text = displayUsername;
-                    if (profile_Email != null) profile_Email.text = displayEmail;
-                    if (profile_Phone != null) profile_Phone.text = displayPhone;
+            if (string.IsNullOrEmpty(displayUsername))
+                displayUsername = CurrentEmail ?? "";
 
-                    // ✅ All Game Panel
-                    if (allGame_UsernameText != null) allGame_UsernameText.text = displayUsername;
+            ApplyUsernameAndEmailToUI(displayUsername, displayEmail, displayPhone);
 
-                    // ✅ Visohunt Panel
-                    if (visoHunt_UsernameText != null) visoHunt_UsernameText.text = displayUsername;
+            string base64 = ReadPublicData(result.Data).profilePicBase64;
+            if (!string.IsNullOrEmpty(base64))
+                ApplyProfilePictureFromBase64(base64);
 
-                    // ✅ Load profile picture
-                    if (!task.IsFaulted && task.Result.Exists)
-                        LoadSavedProfilePicture(task.Result);
-
-                    Debug.Log("✅ User data loaded silently for: " + displayUsername);
-                    // ✅ NO ShowPanel call here — PanelRouter handles it
-                });
-            });
+            Debug.Log("✅ User data loaded silently for: " + displayUsername);
+        },
+        error => Debug.LogError("❌ GetUserData failed: " + error.GenerateErrorReport()));
     }
 
     // ── LOGIN CONFIRM ──────────────────────────────────────────────
     public void OnLoginConfirmButton()
     {
         if (isProcessing) { SetLoginStatus("Please wait..."); return; }
-        if (!firebaseReady) { SetLoginStatus("Not ready, wait..."); return; }
+        if (!sdkReady) { SetLoginStatus("Not ready, wait..."); return; }
 
         string email = login_Email != null ? login_Email.text.Trim() : "";
         string password = login_Password != null ? login_Password.text : "";
@@ -197,7 +279,7 @@ public class FirebaseAuthManager : MonoBehaviour
     public void OnRegisterConfirmButton()
     {
         if (isProcessing) { SetRegisterStatus("Please wait..."); return; }
-        if (!firebaseReady) { SetRegisterStatus("Not ready, wait..."); return; }
+        if (!sdkReady) { SetRegisterStatus("Not ready, wait..."); return; }
 
         string username = reg_Username != null ? reg_Username.text.Trim() : "";
         string email = reg_Email != null ? reg_Email.text.Trim() : "";
@@ -207,6 +289,7 @@ public class FirebaseAuthManager : MonoBehaviour
 
         if (string.IsNullOrEmpty(username)) { SetRegisterStatus("Please enter a username."); return; }
         if (username.Length < 3) { SetRegisterStatus("Username min 3 characters."); return; }
+        if (username.Length > 20) { SetRegisterStatus("Username max 20 characters."); return; }
         if (!IsValidUsername(username)) { SetRegisterStatus("Username: letters, numbers, _ only."); return; }
         if (string.IsNullOrEmpty(email)) { SetRegisterStatus("Please enter your email."); return; }
         if (!IsValidEmail(email)) { SetRegisterStatus("Invalid email address."); return; }
@@ -220,112 +303,67 @@ public class FirebaseAuthManager : MonoBehaviour
         CheckUsernameAndRegister(username, email, password, phone);
     }
 
-    // ── CHECK USERNAME UNIQUE THEN REGISTER ────────────────────────
+    // ── REGISTER (PlayFab enforces Username uniqueness atomically) ─
     void CheckUsernameAndRegister(string username, string email, string password, string phone)
     {
-        isProcessing = true;
-        SetRegisterConfirmInteractable(false);
-        ShowLoading(true);
-        SetRegisterStatus("Checking username...");
-
-        db.Collection("usernames").Document(username.ToLower()).GetSnapshotAsync()
-            .ContinueWith(task =>
-            {
-                UnityMainThreadDispatcher.Instance().Enqueue(() =>
-                {
-                    if (task.IsFaulted)
-                    {
-                        isProcessing = false;
-                        ShowLoading(false);
-                        SetRegisterConfirmInteractable(true);
-                        SetRegisterStatus("Error checking username. Try again.");
-                        return;
-                    }
-
-                    if (task.Result.Exists)
-                    {
-                        isProcessing = false;
-                        ShowLoading(false);
-                        SetRegisterConfirmInteractable(true);
-                        SetRegisterStatus("❌ Username already taken. Choose another.");
-                        return;
-                    }
-
-                    Register(email, password, username, phone);
-                });
-            });
+        Register(email, password, username, phone);
     }
 
     // ── REGISTER ───────────────────────────────────────────────────
     void Register(string email, string password, string username, string phone)
     {
+        isProcessing = true;
+        SetRegisterConfirmInteractable(false);
+        ShowLoading(true);
         SetRegisterStatus("Creating account...");
 
-        auth.CreateUserWithEmailAndPasswordAsync(email, password).ContinueWith(task =>
+        PlayFabClientAPI.RegisterPlayFabUser(new RegisterPlayFabUserRequest
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(() =>
+            Email = email,
+            Password = password,
+            Username = username,
+            DisplayName = username // shows up as leaderboard DisplayName
+        },
+        result =>
+        {
+            CurrentPlayFabId = result.PlayFabId;
+            CurrentEmail = email;
+            CurrentUsername = username;
+
+            LinkDeviceToAccount();
+
+            var privateData = new PrivateProfileData { phone = phone };
+            PlayFabClientAPI.UpdateUserData(new UpdateUserDataRequest
             {
-                if (task.IsCanceled)
-                {
-                    isProcessing = false;
-                    ShowLoading(false);
-                    SetRegisterConfirmInteractable(true);
-                    SetRegisterStatus("Registration cancelled.");
-                    return;
-                }
+                Data = new Dictionary<string, string> { { PRIVATE_DATA_KEY, JsonUtility.ToJson(privateData) } },
+                Permission = UserDataPermission.Private
+            },
+            updateResult =>
+            {
+                isProcessing = false;
+                ShowLoading(false);
+                SetRegisterConfirmInteractable(true);
 
-                if (task.IsFaulted)
-                {
-                    isProcessing = false;
-                    ShowLoading(false);
-                    SetRegisterConfirmInteractable(true);
-                    SetRegisterStatus(GetFirebaseError(task.Exception));
-                    return;
-                }
-
-                FirebaseUser user = task.Result.User;
-
-                // ── Save DisplayName to Firebase Auth ──────────────
-                UserProfile profile = new UserProfile { DisplayName = username };
-                user.UpdateUserProfileAsync(profile);
-
-                // ── Reserve username in Firestore ──────────────────
-                db.Collection("usernames").Document(username.ToLower()).SetAsync(
-                    new Dictionary<string, object> { { "uid", user.UserId } }
-                );
-
-                // ── Save full user data to Firestore ───────────────
-                db.Collection("users").Document(user.UserId).SetAsync(
-                    new Dictionary<string, object>
-                    {
-                        { "username",  username                  },
-                        { "email",     email                     },
-                        { "phone",     phone                     },
-                        { "xp",        0                          },
-                        { "createdAt", FieldValue.ServerTimestamp }
-                    }
-                ).ContinueWith(dbTask =>
-                {
-                    UnityMainThreadDispatcher.Instance().Enqueue(() =>
-                    {
-                        isProcessing = false;
-                        ShowLoading(false);
-                        SetRegisterConfirmInteractable(true);
-
-                        if (dbTask.IsFaulted)
-                        {
-                            SetRegisterStatus("Account created but data save failed.");
-                            Debug.LogError("Firestore save failed: " + dbTask.Exception);
-                            return;
-                        }
-
-                        Debug.Log("✅ Registered: " + username);
-                        ClearRegisterFields();
-                        ShowPanel("login");
-                        SetLoginStatus("✅ Registered! Please login.");
-                    });
-                });
+                Debug.Log("✅ Registered: " + username);
+                ClearRegisterFields();
+                ShowPanel("login");
+                SetLoginStatus("✅ Registered! Please login.");
+            },
+            error =>
+            {
+                isProcessing = false;
+                ShowLoading(false);
+                SetRegisterConfirmInteractable(true);
+                Debug.LogError("Save phone failed: " + error.GenerateErrorReport());
+                SetRegisterStatus("Account created but data save failed.");
             });
+        },
+        error =>
+        {
+            isProcessing = false;
+            ShowLoading(false);
+            SetRegisterConfirmInteractable(true);
+            SetRegisterStatus(GetPlayFabError(error));
         });
     }
 
@@ -337,87 +375,102 @@ public class FirebaseAuthManager : MonoBehaviour
         ShowLoading(true);
         SetLoginStatus("Logging in...");
 
-        auth.SignInWithEmailAndPasswordAsync(email, password).ContinueWith(task =>
+        PlayFabClientAPI.LoginWithEmailAddress(new LoginWithEmailAddressRequest
         {
-            UnityMainThreadDispatcher.Instance().Enqueue(() =>
+            Email = email,
+            Password = password,
+            InfoRequestParameters = new GetPlayerCombinedInfoRequestParams
             {
-                isProcessing = false;
-                ShowLoading(false);
-                SetLoginConfirmInteractable(true);
+                GetUserAccountInfo = true,
+                GetUserData = true
+            }
+        },
+        result =>
+        {
+            isProcessing = false;
+            SetLoginConfirmInteractable(true);
+            CacheSessionInfo(result);
+            LinkDeviceToAccount();
 
-                if (task.IsCanceled) { SetLoginStatus("Login cancelled."); return; }
-
-                if (task.IsFaulted)
-                {
-                    SetLoginStatus(GetFirebaseError(task.Exception));
-                    return;
-                }
-
-                FirebaseUser user = task.Result.User;
-                Debug.Log("✅ Logged in: " + user.Email);
-                LoadUserDataAndShowHomepage(user);
-            });
+            Debug.Log("✅ Logged in: " + CurrentEmail);
+            LoadUserDataAndShowHomepage(result);
+        },
+        error =>
+        {
+            isProcessing = false;
+            ShowLoading(false);
+            SetLoginConfirmInteractable(true);
+            SetLoginStatus(GetPlayFabError(error));
         });
     }
 
     // ── LOAD USER DATA → HOMEPAGE ──────────────────────────────────
-    void LoadUserDataAndShowHomepage(FirebaseUser user)
+    void LoadUserDataAndShowHomepage(LoginResult loginResult)
     {
         SetLoginStatus("Loading profile...");
         ShowLoading(true);
 
-        db.Collection("users").Document(user.UserId).GetSnapshotAsync()
-            .ContinueWith(task =>
-            {
-                UnityMainThreadDispatcher.Instance().Enqueue(() =>
-                {
-                    ShowLoading(false);
+        string displayUsername = CurrentUsername ?? "";
+        string displayEmail = CurrentEmail ?? "";
+        string displayPhone = "";
 
-                    string displayUsername = user.DisplayName ?? "";
-                    string displayEmail = user.Email ?? "";
-                    string displayPhone = "";
+        var dataDict = loginResult?.InfoResultPayload?.UserData;
+        if (dataDict != null)
+        {
+            displayPhone = ReadPrivateData(dataDict).phone ?? "";
+        }
 
-                    if (!task.IsFaulted && task.Result.Exists)
-                    {
-                        if (task.Result.TryGetValue("username", out string fsUsername)
-                            && !string.IsNullOrEmpty(fsUsername))
-                            displayUsername = fsUsername;
+        if (string.IsNullOrEmpty(displayUsername))
+            displayUsername = displayEmail;
 
-                        if (task.Result.TryGetValue("phone", out string fsPhone))
-                            displayPhone = fsPhone;
-                    }
+        ApplyUsernameAndEmailToUI(displayUsername, displayEmail, displayPhone);
 
-                    // Fallback if DisplayName empty
-                    if (string.IsNullOrEmpty(displayUsername))
-                        if (!task.IsFaulted && task.Result.Exists)
-                            task.Result.TryGetValue("username", out displayUsername);
+        if (dataDict != null)
+        {
+            string base64 = ReadPublicData(dataDict).profilePicBase64;
+            if (!string.IsNullOrEmpty(base64))
+                ApplyProfilePictureFromBase64(base64);
+        }
 
-                    // ── Update all UI texts ────────────────────────
-                    if (home_UsernameText != null) home_UsernameText.text = displayUsername ?? "";
-                    if (home_TopUsername != null) home_TopUsername.text = displayUsername ?? "";
-                    if (profile_Username != null) profile_Username.text = displayUsername ?? "";
-                    if (profile_Email != null) profile_Email.text = displayEmail ?? "";
-                    if (profile_Phone != null) profile_Phone.text = displayPhone ?? "";
+        ShowLoading(false);
+        ClearLoginFields();
+        ShowPanel("homepage");
+    }
 
-                    // ── All Game Panel ─────────────────────────────
-                    if (allGame_UsernameText != null) allGame_UsernameText.text = displayUsername ?? "";
+    void ApplyUsernameAndEmailToUI(string username, string email, string phone)
+    {
+        if (home_UsernameText != null) home_UsernameText.text = username ?? "";
+        if (home_TopUsername != null) home_TopUsername.text = username ?? "";
+        if (profile_Username != null) profile_Username.text = username ?? "";
+        if (profile_Email != null) profile_Email.text = email ?? "";
+        if (profile_Phone != null) profile_Phone.text = phone ?? "";
 
-                    // ── Visohunt Panel ─────────────────────────────
-                    if (visoHunt_UsernameText != null) visoHunt_UsernameText.text = displayUsername ?? "";
+        if (allGame_UsernameText != null) allGame_UsernameText.text = username ?? "";
+        if (visoHunt_UsernameText != null) visoHunt_UsernameText.text = username ?? "";
+    }
 
-                    // ── Load profile picture ───────────────────────
-                    LoadSavedProfilePicture(task.Result);
+    PrivateProfileData ReadPrivateData(Dictionary<string, UserDataRecord> data)
+    {
+        if (data != null && data.TryGetValue(PRIVATE_DATA_KEY, out var record) && !string.IsNullOrEmpty(record.Value))
+            return JsonUtility.FromJson<PrivateProfileData>(record.Value);
+        return new PrivateProfileData();
+    }
 
-                    ClearLoginFields();
-                    ShowPanel("homepage");
-                });
-            });
+    PublicProfileData ReadPublicData(Dictionary<string, UserDataRecord> data)
+    {
+        if (data != null && data.TryGetValue(PUBLIC_DATA_KEY, out var record) && !string.IsNullOrEmpty(record.Value))
+            return JsonUtility.FromJson<PublicProfileData>(record.Value);
+        return new PublicProfileData();
     }
 
     // ── LOGOUT ─────────────────────────────────────────────────────
     public void Logout()
     {
-        auth?.SignOut();
+        PlayFabClientAPI.ForgetAllCredentials();
+        CurrentPlayFabId = null;
+        CurrentEmail = null;
+        CurrentUsername = null;
+
         ClearLoginFields();
         ClearRegisterFields();
 
@@ -504,33 +557,20 @@ public class FirebaseAuthManager : MonoBehaviour
     bool IsValidUsername(string username) =>
         Regex.IsMatch(username, @"^[a-zA-Z0-9_]+$");
 
-    // ── FIREBASE ERROR ─────────────────────────────────────────────
-    string GetFirebaseError(System.AggregateException exception)
+    // ── PLAYFAB ERROR ──────────────────────────────────────────────
+    string GetPlayFabError(PlayFabError error)
     {
-        Firebase.FirebaseException firebaseEx = null;
-        foreach (var e in exception.Flatten().InnerExceptions)
+        return error.Error switch
         {
-            firebaseEx = e as Firebase.FirebaseException;
-            if (firebaseEx != null) break;
-        }
-
-        if (firebaseEx != null)
-        {
-            var errorCode = (AuthError)firebaseEx.ErrorCode;
-            return errorCode switch
-            {
-                AuthError.EmailAlreadyInUse => "Email already in use. Try logging in.",
-                AuthError.InvalidEmail => "Invalid email address.",
-                AuthError.WeakPassword => "Password is too weak.",
-                AuthError.WrongPassword => "Wrong password. Try again.",
-                AuthError.UserNotFound => "No account found. Please register.",
-                AuthError.NetworkRequestFailed => "Network error. Check connection.",
-                AuthError.TooManyRequests => "Too many attempts. Try later.",
-                _ => firebaseEx.Message
-            };
-        }
-
-        return exception.Message;
+            PlayFabErrorCode.EmailAddressNotAvailable => "Email already in use. Try logging in.",
+            PlayFabErrorCode.UsernameNotAvailable => "❌ Username already taken. Choose another.",
+            PlayFabErrorCode.InvalidEmailAddress => "Invalid email address.",
+            PlayFabErrorCode.InvalidPassword => "Password is too weak.",
+            PlayFabErrorCode.InvalidEmailOrPassword => "Wrong email or password. Try again.",
+            PlayFabErrorCode.AccountNotFound => "No account found. Please register.",
+            PlayFabErrorCode.ConnectionError => "Network error. Check connection.",
+            _ => error.ErrorMessage
+        };
     }
 
     // ── CHANGE PICTURE BUTTON ──────────────────────────────────────
@@ -559,7 +599,7 @@ public class FirebaseAuthManager : MonoBehaviour
 #endif
     }
 
-    // ── UPLOAD PROFILE PICTURE ─────────────────────────────────────
+    // ── UPLOAD PROFILE PICTURE (stored as Base64 JSON in PlayFab Public Player Data) ──
     IEnumerator UploadProfilePicture(string imagePath)
     {
         ShowLoading(true);
@@ -569,118 +609,63 @@ public class FirebaseAuthManager : MonoBehaviour
         tex.LoadImage(imageBytes);
         TextureScale.Bilinear(tex, 256, 256);
         byte[] resizedBytes = tex.EncodeToJPG(75);
+        string base64 = Convert.ToBase64String(resizedBytes);
 
-        string userId = auth.CurrentUser.UserId;
-        StorageReference pictureRef = storageRef
-            .Child("profilePictures")
-            .Child(userId)
-            .Child("profile.jpg");
+        var publicData = new PublicProfileData { profilePicBase64 = base64 };
+        var updateTask = new TaskCompletionFlag();
 
-        var uploadTask = pictureRef.PutBytesAsync(resizedBytes);
-        yield return new WaitUntil(() => uploadTask.IsCompleted);
-
-        if (uploadTask.IsFaulted)
+        PlayFabClientAPI.UpdateUserData(new UpdateUserDataRequest
         {
-            ShowLoading(false);
-            Debug.LogError("Upload failed: " + uploadTask.Exception);
+            Data = new Dictionary<string, string> { { PUBLIC_DATA_KEY, JsonUtility.ToJson(publicData) } },
+            Permission = UserDataPermission.Public // readable by other players (leaderboard)
+        },
+        result =>
+        {
+            updateTask.Done = true;
+            updateTask.Success = true;
+        },
+        error =>
+        {
+            updateTask.Done = true;
+            updateTask.Success = false;
+            Debug.LogError("Upload failed: " + error.GenerateErrorReport());
+        });
+
+        yield return new WaitUntil(() => updateTask.Done);
+
+        ShowLoading(false);
+
+        if (!updateTask.Success)
             yield break;
-        }
 
-        var urlTask = pictureRef.GetDownloadUrlAsync();
-        yield return new WaitUntil(() => urlTask.IsCompleted);
-
-        if (urlTask.IsFaulted)
-        {
-            ShowLoading(false);
-            Debug.LogError("URL fetch failed: " + urlTask.Exception);
-            yield break;
-        }
-
-        string downloadUrl = urlTask.Result.ToString();
-        Debug.Log("✅ Download URL: " + downloadUrl);
-
-        // ── Save URL to Firestore ──────────────────────────────────
-        db.Collection("users").Document(userId).UpdateAsync("profilePicUrl", downloadUrl)
-            .ContinueWith(task =>
-            {
-                UnityMainThreadDispatcher.Instance().Enqueue(() =>
-                {
-                    if (task.IsFaulted)
-                        Debug.LogError("Failed to save picture URL: " + task.Exception);
-                    else
-                        Debug.Log("✅ Picture URL saved to Firestore.");
-                });
-            });
-
-        // ── Save URL to Firebase Auth photoURL ────────────────────
-        UserProfile profile = new UserProfile
-        {
-            DisplayName = auth.CurrentUser.DisplayName,
-            PhotoUrl = new System.Uri(downloadUrl)
-        };
-        auth.CurrentUser.UpdateUserProfileAsync(profile);
-
-        // ── Show new picture immediately ───────────────────────────
-        StartCoroutine(LoadProfilePicture(downloadUrl));
+        Debug.Log("✅ Profile picture saved to PlayFab player data.");
+        ApplyProfilePictureFromBase64(base64);
     }
 
-    // ── LOAD PICTURE FROM URL ──────────────────────────────────────
-    IEnumerator LoadProfilePicture(string url)
+    private class TaskCompletionFlag
     {
-        using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(url))
-        {
-            yield return request.SendWebRequest();
-
-            ShowLoading(false);
-
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogError("Failed to load picture: " + request.error);
-                yield break;
-            }
-
-            Texture2D texture = DownloadHandlerTexture.GetContent(request);
-            Sprite sprite = Sprite.Create(
-                texture,
-                new Rect(0, 0, texture.width, texture.height),
-                new Vector2(0.5f, 0.5f)
-            );
-
-            if (home_ProfilePicture != null) home_ProfilePicture.sprite = sprite;
-            if (profile_ProfilePicture != null) profile_ProfilePicture.sprite = sprite;
-
-            // ── All Game Panel ─────────────────────────────────────
-            if (allGame_ProfilePicture != null) allGame_ProfilePicture.sprite = sprite;
-
-            // ── Visohunt Panel ─────────────────────────────────────
-            if (visoHunt_ProfilePicture != null) visoHunt_ProfilePicture.sprite = sprite;
-
-            Debug.Log("✅ Profile picture updated!");
-        }
+        public bool Done;
+        public bool Success;
     }
 
-    // ── LOAD SAVED PICTURE ON LOGIN ────────────────────────────────
-    void LoadSavedProfilePicture(DocumentSnapshot doc)
+    // ── APPLY PICTURE FROM BASE64 ──────────────────────────────────
+    void ApplyProfilePictureFromBase64(string base64)
     {
-        // Try Firebase Auth photoURL first
-        if (auth.CurrentUser.PhotoUrl != null)
-        {
-            string photoUrl = auth.CurrentUser.PhotoUrl.ToString();
-            if (!string.IsNullOrEmpty(photoUrl))
-            {
-                StartCoroutine(LoadProfilePicture(photoUrl));
-                return;
-            }
-        }
+        byte[] bytes = Convert.FromBase64String(base64);
+        Texture2D texture = new Texture2D(2, 2);
+        texture.LoadImage(bytes);
 
-        // Fallback: Firestore URL
-        if (doc != null && doc.Exists)
-        {
-            if (doc.TryGetValue("profilePicUrl", out string savedUrl)
-                && !string.IsNullOrEmpty(savedUrl))
-            {
-                StartCoroutine(LoadProfilePicture(savedUrl));
-            }
-        }
+        Sprite sprite = Sprite.Create(
+            texture,
+            new Rect(0, 0, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f)
+        );
+
+        if (home_ProfilePicture != null) home_ProfilePicture.sprite = sprite;
+        if (profile_ProfilePicture != null) profile_ProfilePicture.sprite = sprite;
+        if (allGame_ProfilePicture != null) allGame_ProfilePicture.sprite = sprite;
+        if (visoHunt_ProfilePicture != null) visoHunt_ProfilePicture.sprite = sprite;
+
+        Debug.Log("✅ Profile picture updated!");
     }
 }

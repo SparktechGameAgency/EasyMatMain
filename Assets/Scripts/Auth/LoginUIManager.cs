@@ -1,5 +1,5 @@
 using UnityEngine;
-using Firebase.Auth;
+using PlayFab;
 
 public class LoginUIManager : MonoBehaviour
 {
@@ -25,8 +25,8 @@ public class LoginUIManager : MonoBehaviour
         }
 
         // Normal flow — check login state
-        var user = FirebaseAuth.DefaultInstance.CurrentUser;
-        if (user != null)
+        bool loggedIn = PlayFabClientAPI.IsClientLoggedIn();
+        if (loggedIn)
         {
             Debug.Log("✅ Already logged in → HomePanel");
             GoToHome();
@@ -58,7 +58,7 @@ public class LoginUIManager : MonoBehaviour
         PlayerPrefs.DeleteKey("OpenPanel");
         PlayerPrefs.Save();
 
-        FirebaseAuth.DefaultInstance.SignOut();
+        PlayFabClientAPI.ForgetAllCredentials();
         GoToLogin();
     }
 }

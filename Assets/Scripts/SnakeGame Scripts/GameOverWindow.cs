@@ -99,11 +99,10 @@ public class GameOverWindow : MonoBehaviour
             Time.timeScale = 1f;
 
             // ✅ Save auth session
-            var user = Firebase.Auth.FirebaseAuth.DefaultInstance.CurrentUser;
-            if (user != null)
+            if (PlayFab.PlayFabClientAPI.IsClientLoggedIn())
             {
-                PlayerPrefs.SetString("LoggedInUID", user.UserId);
-                PlayerPrefs.SetString("LoggedInEmail", user.Email);
+                PlayerPrefs.SetString("LoggedInUID", FirebaseAuthManager.CurrentPlayFabId);
+                PlayerPrefs.SetString("LoggedInEmail", FirebaseAuthManager.CurrentEmail);
             }
 
             // ✅ Set static flag

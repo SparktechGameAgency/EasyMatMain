@@ -6,7 +6,7 @@ public class SceneLoader : MonoBehaviour
     // Loads a scene by its name
     public void LoadSceneByName(string sceneName)
     {
-        Time.timeScale = 1f; // Make sure game isn’t paused
+        Time.timeScale = 1f; // Make sure game isnï¿½t paused
         SceneManager.LoadScene(sceneName);
     }
 
@@ -40,16 +40,15 @@ using UnityEngine.SceneManagement;
 
 public class SceneLoader : MonoBehaviour
 {
-    // ? Helper — saves Firebase auth session before scene switch
+    // Helper â€” saves PlayFab auth session before scene switch
     void SaveAuthSession()
     {
-        var user = Firebase.Auth.FirebaseAuth.DefaultInstance.CurrentUser;
-        if (user != null)
+        if (PlayFab.PlayFabClientAPI.IsClientLoggedIn())
         {
-            PlayerPrefs.SetString("LoggedInUID", user.UserId);
-            PlayerPrefs.SetString("LoggedInEmail", user.Email);
+            PlayerPrefs.SetString("LoggedInUID", FirebaseAuthManager.CurrentPlayFabId);
+            PlayerPrefs.SetString("LoggedInEmail", FirebaseAuthManager.CurrentEmail);
             PlayerPrefs.Save();
-            Debug.Log("? Auth session saved for: " + user.Email);
+            Debug.Log("Auth session saved for: " + FirebaseAuthManager.CurrentEmail);
         }
     }
 

@@ -1,6 +1,6 @@
 using System.Collections;
 using UnityEngine;
-using Firebase.Auth;
+using PlayFab;
 
 public class PanelRouter : MonoBehaviour
 {
@@ -33,18 +33,18 @@ public class PanelRouter : MonoBehaviour
 
     IEnumerator WaitForAuthThenOpen(string panelName)
     {
-        Debug.Log("⏳ Waiting for Firebase Auth...");
+        Debug.Log("⏳ Waiting for PlayFab Auth...");
 
         float timeout = 5f;
         float elapsed = 0f;
 
-        while (FirebaseAuth.DefaultInstance.CurrentUser == null && elapsed < timeout)
+        while (!PlayFabClientAPI.IsClientLoggedIn() && elapsed < timeout)
         {
             elapsed += Time.deltaTime;
             yield return null;
         }
 
-        bool isLoggedIn = FirebaseAuth.DefaultInstance.CurrentUser != null;
+        bool isLoggedIn = PlayFabClientAPI.IsClientLoggedIn();
 
         if (!isLoggedIn)
         {
