@@ -58,7 +58,7 @@ namespace StackTower
             deathZone = deathZoneRef;
 
             rb.gravityScale = 0f;
-            rb.velocity = Vector2.zero;
+            rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
             rb.isKinematic = false;
             rb.constraints = RigidbodyConstraints2D.FreezePositionX;
@@ -102,8 +102,8 @@ namespace StackTower
                 }
             }
 
-            if (maxFallSpeed > 0 && rb.velocity.y < -maxFallSpeed)
-                rb.velocity = new Vector2(rb.velocity.x, -maxFallSpeed);
+            if (maxFallSpeed > 0 && rb.linearVelocity.y < -maxFallSpeed)
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, -maxFallSpeed);
 
             if (!hasResolved && deathZone != null && transform.position.y < deathZone.position.y)
                 ResolveVoid();
@@ -137,7 +137,7 @@ namespace StackTower
 
             if (col.gameObject.CompareTag("Block") || col.gameObject.CompareTag("BaseBlock"))
             {
-                bool velocitySettled = rb.velocity.magnitude < settleVelocity;
+                bool velocitySettled = rb.linearVelocity.magnitude < settleVelocity;
                 bool rotationSettled = Mathf.Abs(rb.angularVelocity) < settleAngular;
 
                 if (velocitySettled && rotationSettled)
@@ -166,7 +166,7 @@ namespace StackTower
             hasLanded = true;
 
             rb.gravityScale = 0f;
-            rb.velocity = Vector2.zero;
+            rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
             rb.isKinematic = true;
             rb.constraints = RigidbodyConstraints2D.FreezeAll;

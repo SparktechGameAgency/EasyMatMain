@@ -51,5 +51,6 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "EasyMatMain.sln"
+    "EasyMatMain.sln=======dotnet.defaultSolution": "EasyMatMain.slnx>>>>>>>Stashedchanges",
+    "dotnet.defaultSolution": "EasyMatMain.slnx"
 }

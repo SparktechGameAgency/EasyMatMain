@@ -77,8 +77,8 @@ public class TunnelBlock : MonoBehaviour
         // Initial kinematic state while riding the holder
         rb.bodyType = RigidbodyType2D.Kinematic;
         rb.gravityScale = 0f;
-        rb.drag = 0f;
-        rb.angularDrag = 0.05f;
+        rb.linearDamping = 0f;
+        rb.angularDamping = 0.05f;
 
         if (manager != null)
             manager.SetBlockZRotationConstraint(this.transform, true);
@@ -110,20 +110,20 @@ public class TunnelBlock : MonoBehaviour
         transform.SetParent(null);
 
         rb.bodyType = RigidbodyType2D.Dynamic;
-        rb.velocity = Vector2.zero;
+        rb.linearVelocity = Vector2.zero;
 
         // Soft-fall for later blocks
         if (manager != null && blockNumber >= manager.gravityReductionStartBlock)
         {
             rb.gravityScale = manager.reducedGravityScale;
-            rb.drag = 5f;
-            rb.angularDrag = 10f;
+            rb.linearDamping = 5f;
+            rb.angularDamping = 10f;
         }
         else
         {
             rb.gravityScale = 1f;
-            rb.drag = 0f;
-            rb.angularDrag = 0.05f;
+            rb.linearDamping = 0f;
+            rb.angularDamping = 0.05f;
         }
 
         // Asteroid lateral impulse

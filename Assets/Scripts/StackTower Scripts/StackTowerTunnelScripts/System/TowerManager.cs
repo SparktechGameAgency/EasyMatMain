@@ -380,7 +380,7 @@ namespace StackTower
                 : topHighest.position.y;   // topHighest resolved above
             float fallDist = Mathf.Max(0f, currentY - landingY);
 
-            float v0 = rb != null ? Mathf.Abs(rb.velocity.y) : 0f;
+            float v0 = rb != null ? Mathf.Abs(rb.linearVelocity.y) : 0f;
             float gravAccel = (rb != null ? rb.gravityScale : 1f) *
                               Mathf.Abs(Physics2D.gravity.y);
 
@@ -521,7 +521,7 @@ namespace StackTower
             if (rb != null)
             {
                 rb.gravityScale = 0f;
-                rb.velocity = Vector2.zero;
+                rb.linearVelocity = Vector2.zero;
                 rb.angularVelocity = 0f;
                 rb.isKinematic = true;
                 rb.constraints = RigidbodyConstraints2D.FreezeAll;

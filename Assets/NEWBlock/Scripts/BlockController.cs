@@ -32,7 +32,7 @@ public class BlockController : MonoBehaviour
         isPlaced = true;
         isFalling = false;
         rb.bodyType = RigidbodyType2D.Kinematic;
-        rb.velocity = Vector2.zero;
+        rb.linearVelocity = Vector2.zero;
         transform.rotation = Quaternion.identity;
     }
 
